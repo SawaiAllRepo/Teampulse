@@ -1,0 +1,11 @@
+﻿node_modules
+.git
+.env*
+!.env.example
+.vercel
+apps-script
+deployment
+TeamPulse-AppsScript.zip
+tests
+
+backups/

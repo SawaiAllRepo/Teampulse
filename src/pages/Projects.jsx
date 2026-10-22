@@ -1,0 +1,7 @@
+import React from 'react';
+import {ArrowUpRight,FolderKanban} from 'lucide-react';
+import SearchBox from '../components/SearchBox.jsx';
+
+export default function Projects({admin,tasks,projects,search,setSearch,filtered,employee,badge,mutate,busy,setPage}){
+ return <>{<><div className="toolbar"><SearchBox value={search} set={setSearch}/><span>{projects.length} projects in your workspace</span></div><div className="projectgrid">{filtered(projects).map(p=>{const ts=tasks.filter(t=>t.projectId===p.id);const progress=ts.length?Math.round(ts.filter(t=>t.status==='Done').length/ts.length*100):0;return <article className="panel project" key={p.id}><div className="projecttop"><span className="statIcon"><FolderKanban/></span>{badge(p.status)}</div><small>{p.department}</small><h3>{p.name}</h3><p>{p.description}</p><div className="progresslabel"><span>Task completion</span><b>{progress}%</b></div><div className="progress"><span style={{width:progress+'%'}}/></div><div className="projectfooter"><span>{ts.length} tasks · {employee(p.owner)}</span><span>Due {p.due}</span></div><button className="textbtn" onClick={()=>{setPage('Tasks');setSearch(p.name)}}>View tasks <ArrowUpRight size={15}/></button>{admin&&<div className="actions" style={{marginTop:18}}><button disabled={busy} aria-label={'Delete project: '+p.name} onClick={()=>{if(window.confirm('Delete project "'+p.name+'" and its '+ts.length+' linked tasks? This cannot be undone.'))mutate('deleteProject',{id:p.id});}}>Delete project</button></div>}</article>})}</div></>}</>;
+}

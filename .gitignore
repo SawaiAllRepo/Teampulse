@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env*
+!.env.example
+.vercel/
+.vercel
+
+# Generated Apps Script deployment package
+deployment/
+TeamPulse-AppsScript.zip
+
+backups/

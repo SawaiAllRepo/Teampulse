@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="EMP-01 Employee: Valid login" time="0.338718" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-02 Employee: Invalid password" time="0.310334" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-03 Employee: Private authentication records" time="0.001857" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-04 Employee: Personal attendance with location" time="0.003761" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-05 Employee: Work log ownership" time="0.003022" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-06 Employee: Logout revokes access" time="0.001575" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-07 Employee: Personal data scope" time="0.004438" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-08 Employee: Assigned task permissions" time="0.001891" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-09 Employee: Employee administration denied" time="0.001831" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="EMP-10 Employee: Leave request and review boundary" time="0.001760" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-01 Admin: Valid login" time="0.310232" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-02 Admin: Invalid password" time="0.312435" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-03 Admin: Private authentication records" time="0.002660" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-04 Admin: Personal attendance with location" time="0.001920" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-05 Admin: Work log ownership" time="0.001480" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-06 Admin: Logout revokes access" time="0.001548" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-07 Admin: Organization visibility" time="0.001490" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-08 Admin: Grant privileged access" time="0.001659" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-09 Admin: Create project and task" time="0.001928" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="ADM-10 Admin: Leave review cannot be repeated" time="0.001659" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-01 Team Leader: Valid login" time="0.307333" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-02 Team Leader: Invalid password" time="0.307850" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-03 Team Leader: Private authentication records" time="0.001754" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-04 Team Leader: Personal attendance with location" time="0.001840" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-05 Team Leader: Work log ownership" time="0.003373" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-06 Team Leader: Logout revokes access" time="0.001709" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-07 Team Leader: Owned project scope" time="0.001502" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-08 Team Leader: Project ownership enforcement" time="0.001844" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-09 Team Leader: Task creation scope" time="0.001700" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="TL-10 Team Leader: Administrative actions denied" time="0.001582" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-01 HR: Valid login" time="0.321702" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-02 HR: Invalid password" time="0.312071" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-03 HR: Private authentication records" time="0.001771" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-04 HR: Personal attendance with location" time="0.002005" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-05 HR: Work log ownership" time="0.001851" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-06 HR: Logout revokes access" time="0.001888" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-07 HR: Organization visibility" time="0.001738" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-08 HR: Approve account and grant Team Leader" time="0.001555" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-09 HR: Privileged access boundary" time="0.001755" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<testcase name="HR-10 HR: Review leave and publish notice" time="0.001888" classname="test" file="C:\TeamPulse\tests\roles.test.mjs"/>
+	<!-- tests 40 -->
+	<!-- suites 0 -->
+	<!-- pass 40 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 3033.7918 -->
+</testsuites>
