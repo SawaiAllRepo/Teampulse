@@ -18,3 +18,7 @@
 .punchsuccess{background:white;border-radius:16px;padding:32px;max-width:400px;width:100%;text-align:center;box-shadow:0 24px 70px #0003}.punchsuccessicon{display:inline-flex;padding:16px;border-radius:50%;background:#eaf7f0;color:#309470}.punchsuccess h2{font-size:21px;margin:20px 0 12px}.punchsuccess p{font-size:13px;color:#63718a;line-height:1.7}.punchsuccess button{margin-top:16px;width:100%}
 
 .profileoverview{display:flex;align-items:center;gap:16px;margin-top:24px}.profileoverview i{width:56px;height:56px;font-size:18px}.profileoverview p{margin:4px 0}.passwordsettings input[readonly]{background:#f5f7fb;color:#748199}
+
+.requestform{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;padding:20px 0}.requestform label{display:flex;flex-direction:column;gap:8px}.requestform input,.requestform select,.requestform textarea{padding:10px;border:1px solid #d9dce5;border-radius:8px;font:inherit;width:100%;box-sizing:border-box}.requestform p{grid-column:1/-1;color:#626a80}.requestform textarea{min-height:85px}
+
+.requestform fieldset{border:1px solid #d9dce5;border-radius:8px;padding:12px}.requestform fieldset label{display:flex;flex-direction:row;align-items:center;gap:8px;padding:3px}.requestform input[type=checkbox]{width:auto}.stats .stat{text-align:left}.actions{flex-wrap:wrap}

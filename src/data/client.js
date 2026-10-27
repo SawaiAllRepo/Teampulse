@@ -1,6 +1,6 @@
 ﻿import {indiaDate} from '../utils/attendance.js';
 export const today=()=>indiaDate();
-export const emptyData=()=>({employees:[],projects:[],tasks:[],attendance:[],worklogs:[],leaves:[],announcements:[]});
+export const emptyData=()=>({employees:[],projects:[],tasks:[],attendance:[],worklogs:[],leaves:[],corrections:[],announcements:[]});
 let token=sessionStorage.getItem('teampulse-session')||'';
 export const hasSession=()=>Boolean(token);
 export function setSession(value){token=value||'';if(token)sessionStorage.setItem('teampulse-session',token);else sessionStorage.removeItem('teampulse-session');}
