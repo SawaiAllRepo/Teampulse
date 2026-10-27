@@ -18,3 +18,5 @@
 .punchsuccess{background:white;border-radius:16px;padding:32px;max-width:400px;width:100%;text-align:center;box-shadow:0 24px 70px #0003}.punchsuccessicon{display:inline-flex;padding:16px;border-radius:50%;background:#eaf7f0;color:#309470}.punchsuccess h2{font-size:21px;margin:20px 0 12px}.punchsuccess p{font-size:13px;color:#63718a;line-height:1.7}.punchsuccess button{margin-top:16px;width:100%}
 
 .profileoverview{display:flex;align-items:center;gap:16px;margin-top:24px}.profileoverview i{width:56px;height:56px;font-size:18px}.profileoverview p{margin:4px 0}.passwordsettings input[readonly]{background:#f5f7fb;color:#748199}
+
+.attendancefilters select{padding:9px 12px;border:1px solid var(--border);border-radius:7px;color:var(--navy);background:white;min-width:180px}.attendancepanel>p:not(.error){margin:0 22px 18px}

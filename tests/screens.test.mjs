@@ -20,6 +20,7 @@ test('every screen renders empty and populated workspaces for all four roles',as
  const props={...db,db,me:{...employee,role},role,admin:['Admin','HR'].includes(role),lead:role!=='Employee',open:db.tasks,currentAttendance:populated?record:null,search:'',busy:false,accessEvents:[],attendanceDate:date,syncedAt:'',punchStage:'',location:null,employee:()=>employee.name,initials:()=> 'TE',filtered:rows=>rows,badge:s=>React.createElement('span',null,s),taskTable:()=>React.createElement('div',null,'Tasks'),setSearch:noop,mutate:noop,setModal:noop,setAttendanceDate:noop,changePassword:noop,setError:noop,setPage:noop,load:noop,setBusy:noop,setNotice:noop,fail:noop,syncAttendance:noop,onLogin:noop};
  const html=renderToStaticMarkup(React.createElement(Screen,props));assert.ok(html.length>0);
  if(page==='Overview')assert.equal(html.includes('Team attendance today'),props.admin);
+ if(page==='Attendance'){assert.equal(html.includes('Download Excel'),props.admin);assert.equal(html.includes('Employee filter'),props.admin);}
  });
  }
 });

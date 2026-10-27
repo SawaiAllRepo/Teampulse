@@ -51,7 +51,7 @@ return <div className="app"><aside className={mobile?'sidebar show':'sidebar'}><
 {page==='Tasks'&&<Tasks tasks={tasks} search={search} setSearch={setSearch} taskTable={taskTable}/>}
 {page==='Employees'&&<Employees admin={admin} db={db} me={me} role={role} search={search} setSearch={setSearch} filtered={filtered} employee={employee} initials={initials} badge={badge} mutate={mutate} busy={busy}/>}
 {page==='Projects'&&<Projects admin={admin} tasks={tasks} projects={projects} search={search} setSearch={setSearch} filtered={filtered} employee={employee} badge={badge} mutate={mutate} busy={busy} setPage={setPage}/>}
-{page==='Attendance'&&<Attendance syncAttendance={syncAttendance} me={me} role={role} attendance={attendance} currentAttendance={currentAttendance} employee={employee} mutate={mutate} busy={busy} location={location} punchStage={punchStage} syncedAt={syncedAt} accessEvents={accessEvents} attendanceDate={attendanceDate} setAttendanceDate={setAttendanceDate}/>}
+{page==='Attendance'&&<Attendance employees={db.employees} syncAttendance={syncAttendance} me={me} role={role} attendance={attendance} currentAttendance={currentAttendance} employee={employee} mutate={mutate} busy={busy} location={location} punchStage={punchStage} syncedAt={syncedAt} accessEvents={accessEvents} attendanceDate={attendanceDate} setAttendanceDate={setAttendanceDate}/>}
 {page==='Work logs'&&<WorkLogs worklogs={worklogs} employee={employee}/>}
 {page==='Leave requests'&&<LeaveRequests admin={admin} leaves={leaves} employee={employee} badge={badge} mutate={mutate} busy={busy}/>}
 {page==='Announcements'&&<Announcements admin={admin} db={db} mutate={mutate} busy={busy}/>}
