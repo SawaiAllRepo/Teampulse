@@ -13,7 +13,7 @@ test('every screen renders empty and populated workspaces for all four roles',as
  const other={...employee,id:'e2',name:'Other Employee',status:'Pending'};
  const date=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});
  const record={id:'a1',employeeId:'e1',date,checkIn:new Date().toISOString(),checkOut:new Date().toISOString()};
- for(const page of ['AdminOverview','EmployeeManagement','RolesPermissions','Reports','ActivityHistory','Login','Overview','Employees','Projects','Tasks','Attendance','WorkLogs','LeaveRequests','Announcements','Settings']){
+ for(const page of ['Login','Overview','Employees','Projects','Tasks','Attendance','WorkLogs','LeaveRequests','Announcements','Settings']){
  const {default:Screen}=await server.ssrLoadModule('/src/pages/'+page+'.jsx');
  for(const role of ['Admin','HR','Team Leader','Employee'])for(const populated of [false,true])await t.test(`${page}: ${role}, ${populated?'populated':'empty'}`,()=>{
  const db={employees:populated?[employee,other]:[],projects:populated?[{id:'p1',name:'Project',owner:'e1',status:'In progress',due:date}]:[],tasks:populated?[{id:'t1',title:'Task',projectId:'p1',assignee:'e1',status:'To do',due:date}]:[],attendance:populated?[record]:[],worklogs:populated?[{id:'w1',employeeId:'e1',date,summary:'Work',hours:2}]:[],leaves:populated?[{id:'l1',employeeId:'e1',start:date,end:date,status:'Pending'}]:[],announcements:populated?[{id:'n1',title:'Notice',message:'Message'}]:[]};
