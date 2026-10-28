@@ -90,7 +90,7 @@ Language switching is removed from login, the app header and Settings. The app a
 
 Employees directory: every authenticated role receives the full non-deleted employee directory through bootstrap and automatic attendance snapshots. It is independent of online-status summaries; private profile and attendance access remains scoped. Deploy the latest backend Code.gs together with Index.html; an older backend that returns only the signed-in profile cannot supply the full directory.
 
-Attendance displays online status and shift hours. The shift is 09:30–18:30 IST (9 hours). Worked time uses saved punches, includes open sessions up to the current time, merges overlapping sessions, and excludes time outside the shift. Employee-directory totals use the same calculation. Attendance rows show each session’s shift hours and the employee’s current online status. Today’s own total and remaining shift hours update automatically. No break deduction is assumed.
+Attendance displays online status and shift hours. The shift is 09:30–18:30 IST (9 hours). Worked time uses saved punches, includes open sessions up to the current time, merges overlapping sessions, and includes time outside the shift. Employee-directory totals use the same calculation. Attendance rows show each session’s shift hours and the employee’s current online status. Today’s own total and remaining shift hours update automatically. No break deduction is assumed.
 
 Attendance summary cleanup: Worked today, Remaining shift hours and Online status cards are removed. Shift information and the attendance table’s working-hours/current-status columns remain.
 

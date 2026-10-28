@@ -153,3 +153,6 @@ Run `npm run test:roles` for 40 dedicated Employee, Admin, Team Leader and HR ca
 ## CRUD completion (28 October 2026)
 
 Record editors and role-restricted deletion are connected to the Google Sheets API across the business modules. See [CRUD coverage, persistence checks and live deployment status](docs/crud-verification.md). The configured Apps Script endpoint is reachable; deploying the updated backend/frontend and verifying signed-in live Sheet writes remain required.
+
+### Leave request emails
+New leave submissions currently email piyalikushwah672@gmail.com using MailApp (temporary recipient configured in notifyLeaveAdmins_). Copy the updated deployment/Code.gs and deployment/appsscript.json to Apps Script, run setup() as the deploying owner to authorize the added send-mail permission, then update the web app deployment to a new version. Existing leave approval permissions are unchanged. Email failures (including quota or authorization errors) keep the leave saved and record leaveEmailFailed in the audit sheet; inspect Apps Script execution logs for details. Emails are sent only on new submissions, not edits or rejected/invalid submissions.
