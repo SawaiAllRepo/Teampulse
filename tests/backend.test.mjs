@@ -19,9 +19,9 @@ test('leave review requires HR/Admin and pending status',()=>{assert.equal(backe
 test('invalid or overlapping leave is rejected',()=>{const b=backend('e@company.test');const record={type:'Casual',start:'2026-10-21',end:'2026-10-20',reason:'Test'};assert.equal(b.call('create',{collection:'leaves',record}).ok,false);record.end='2026-10-22';assert.equal(b.call('create',{collection:'leaves',record}).ok,false)});
 test('formula-like text is escaped on write',()=>{const b=backend();assert.equal(b.call('create',{collection:'announcements',record:{title:'=IMPORTXML("bad")',message:'Hello'}}).ok,true);assert.equal(b.sheets.announcements[1][1][0],"'")});
 
-test('project and task creation persist to the backing Sheets service',()=>{const b=backend();assert.equal(b.call('create',{collection:'projects',record:{name:'Real project',description:'Delivery',department:'IT',owner:'l',status:'Planning',due:'2026-11-01'}}).ok,true);const projectId=b.sheets.projects.at(-1)[0];assert.equal(b.call('create',{collection:'tasks',record:{title:'Real task',projectId,assignee:'e',priority:'High',status:'To do',due:'2026-11-01'}}).ok,true);assert.equal(b.sheets.tasks.at(-1)[2],projectId)});
+test('project and task creation persist to the backing Sheets service',()=>{const b=backend();assert.equal(b.call('create',{collection:'projects',record:{name:'Real project',description:'Delivery',department:'IT',owner:'l',status:'Planning',due:'2026-11-01'}}).ok,true);const projectId=b.sheets.projects.at(-1)[0];assert.equal(b.call('create',{collection:'tasks',record:{title:'Real task',description:'Instructions and expected result',projectId,assignee:'e',priority:'High',status:'To do',due:'2026-11-01'}}).ok,true);assert.equal(b.sheets.tasks.at(-1)[2],projectId)});
 test('employee work log persists with server-assigned ownership',()=>{const b=backend('e@company.test');assert.equal(b.call('create',{collection:'worklogs',record:{date:'2026-10-14',summary:'Completed integration',hours:'4',blockers:'',employeeId:'x'}}).ok,true);assert.equal(b.sheets.worklogs[1][1],'e');assert.equal(b.sheets.worklogs[1][3],'Completed integration')});
-test('valid leave request persists as Pending and owned by requester',()=>{const b=backend('x@company.test');assert.equal(b.call('create',{collection:'leaves',record:{type:'Sick',start:'2026-10-25',end:'2026-10-25',reason:'Rest',status:'Approved',employeeId:'e'}}).ok,true);assert.equal(b.sheets.leaves.at(-1)[1],'x');assert.equal(b.sheets.leaves.at(-1)[6],'Pending')});
+test('valid leave request persists as Pending and owned by requester',()=>{const b=backend('x@company.test');assert.equal(b.call('create',{collection:'leaves',record:{type:'Sick',start:'2026-10-26',end:'2026-10-26',reason:'Rest',status:'Approved',employeeId:'e'}}).ok,true);assert.equal(b.sheets.leaves.at(-1)[1],'x');assert.equal(b.sheets.leaves.at(-1)[6],'Pending')});
 test('new employee is persisted and returned in admin directory',()=>{const b=backend();const r=b.call('create',{collection:'employees',record:{name:'Actual employee',email:'actual@company.test',role:'Employee',department:'IT',designation:'Developer'}});assert.equal(r.ok,true);assert.ok(r.data.db.employees.some(e=>e.email==='actual@company.test'));assert.equal(b.sheets.employees.at(-1)[1],'Actual employee')});
 
 test('self-registration creates a Pending Employee and a bcrypt hash, ignoring submitted privileges',()=>{const b=backend('');const r=b.call('register',{name:'New Person',email:'NEW@example.com',department:'IT',designation:'Developer',password,role:'Admin',status:'Active'});assert.equal(r.ok,true);assert.equal(r.data.pending,true);const employee=b.sheets.employees.at(-1);assert.equal(employee[2],'new@example.com');assert.equal(employee[3],'Employee');assert.equal(employee[6],'Pending');const credential=b.sheets.credentials.at(-1);assert.match(credential[3],/^\$2b\$12\$/);assert.notEqual(credential[3],password);assert.equal(bcrypt.compareSync(password,credential[3]),true);assert.equal(JSON.stringify(r).includes(credential[3]),false)});
@@ -153,7 +153,7 @@ test('profile editor rejects blank and oversized names',()=>{const b=backend('e@
 test('Admin and HR can create and delete announcements without removing other rows',()=>{for(const email of ['admin@company.test','h@company.test']){const b=backend(email);for(const title of ['First','Keep'])assert.equal(b.call('create',{collection:'announcements',record:{title,message:'Team update'}}).ok,true);const id=b.sheets.announcements[1][0];const r=b.call('deleteAnnouncement',{id});assert.equal(r.ok,true);assert.equal(r.data.db.announcements.length,1);assert.equal(r.data.db.announcements[0].title,'Keep');assert.equal(b.sheets.audit.at(-1)[2],'deleteAnnouncement');assert.equal(b.call('deleteAnnouncement',{id}).ok,false);}});
 test('employees and leaders cannot create or delete announcements',()=>{for(const email of ['e@company.test','l@company.test']){const b=backend(email);assert.equal(b.call('create',{collection:'announcements',record:{title:'No',message:'No'}}).ok,false);assert.equal(b.call('deleteAnnouncement',{id:'anything'}).ok,false);assert.equal(b.sheets.announcements.length,1);}});
 
-test('Admin and HR delete a project and its tasks while preserving other projects and records',()=>{for(const email of ['admin@company.test','h@company.test']){const b=backend(email);assert.equal(b.call('create',{collection:'tasks',record:{title:'Second linked task',projectId:'p',assignee:'e',priority:'Low',status:'To do',due:'2026-10-20'}}).ok,true);const r=b.call('deleteProject',{id:'p'});assert.equal(r.ok,true);assert.equal(r.data.db.projects.length,1);assert.equal(r.data.db.projects[0].id,'q');assert.equal(r.data.db.tasks.length,1);assert.equal(r.data.db.tasks[0].id,'v');assert.equal(b.sheets.employees.length,6);assert.equal(b.sheets.audit.at(-1)[2],'deleteProject');assert.equal(b.call('deleteProject',{id:'p'}).ok,false);}});
+test('Admin and HR delete a project and its tasks while preserving other projects and records',()=>{for(const email of ['admin@company.test','h@company.test']){const b=backend(email);assert.equal(b.call('create',{collection:'tasks',record:{title:'Second linked task',description:'Instructions and expected result',projectId:'p',assignee:'e',priority:'Low',status:'To do',due:'2026-10-20'}}).ok,true);const r=b.call('deleteProject',{id:'p'});assert.equal(r.ok,true);assert.equal(r.data.db.projects.length,1);assert.equal(r.data.db.projects[0].id,'q');assert.equal(r.data.db.tasks.length,1);assert.equal(r.data.db.tasks[0].id,'v');assert.equal(b.sheets.employees.length,6);assert.equal(b.sheets.audit.at(-1)[2],'deleteProject');assert.equal(b.call('deleteProject',{id:'p'}).ok,false);}});
 test('employees and leaders cannot delete projects',()=>{for(const email of ['e@company.test','l@company.test']){const b=backend(email);assert.equal(b.call('deleteProject',{id:'p'}).ok,false);assert.equal(b.sheets.projects.length,3);assert.equal(b.sheets.tasks.length,3);}});
 
 test('Admin and HR delete employees while preserving history and blocking login',()=>{for(const email of ['admin@company.test','h@company.test']){const b=backend(email);const r=b.call('deleteEmployee',{id:'e'});assert.equal(r.ok,true);assert.equal(b.sheets.employees.find(e=>e[0]==='e')[6],'Deleted');assert.equal(b.sheets.tasks.length,3);assert.equal(b.sheets.leaves.length,2);assert.equal(b.call('login',{email:'e@company.test',password},'').ok,false);assert.equal(b.call('employeeAccess',{id:'e',role:'Employee',status:'Active'}).ok,false);assert.equal(b.call('deleteEmployee',{id:'e'}).ok,false);}});
@@ -185,4 +185,42 @@ test('owner setup rejects conflicting Admin identity links without modifying emp
  const before=JSON.stringify([b.sheets.employees,b.sheets.credentials]);assert.throws(()=>vm.runInContext('setup()',b.ctx));
  assert.equal(JSON.stringify([b.sheets.employees,b.sheets.credentials]),before);
  }
+});
+
+test('announcement creator comes from the audit and is visible to employees',()=>{
+ const b=backend();
+ const created=b.call('create',{collection:'announcements',record:{title:'Team news',message:'Hello',createdBy:'h',createdByName:'Fake author'}});
+ assert.equal(created.ok,true);
+ assert.equal(created.data.db.announcements[0].createdBy,'a');
+ assert.equal(created.data.db.announcements[0].createdByName,'a');
+ const employee=b.call('login',{email:'e@company.test',password});
+ assert.equal(employee.ok,true);
+ assert.equal(employee.data.db.announcements[0].createdByName,'a');
+ assert.equal(employee.data.db.employees.some(person=>person.id==='a'),false);
+ assert.equal('audit' in employee.data.db,false);
+});
+test('legacy announcements without creation audit have no invented author',()=>{
+ const b=backend();b.sheets.announcements.push(['legacy','Old notice','Hello','2026-10-01']);
+ const result=b.call('bootstrap');
+ assert.equal(result.data.db.announcements[0].createdByName,'');
+});
+
+test('employee edits own pending leave, excluding itself from overlap checks',()=>{
+ const b=backend('e@company.test');const record={type:'Casual',start:'2026-10-20',end:'2026-10-21',reason:'Updated plans'};
+ const result=b.call('editLeave',{id:'lv',record});assert.equal(result.ok,true);assert.equal(result.data.db.leaves[0].reason,'Updated plans');assert.equal(result.data.db.leaves[0].status,'Pending');assert.equal(result.data.db.leaves[0].employeeId,'e');assert.equal(b.sheets.audit.at(-1)[2],'editLeave');
+ assert.equal(b.call('editLeave',{id:'lv',record:{...record,end:'2026-10-19'}}).ok,false);
+ assert.equal(b.call('editLeave',{id:'lv',record:{...record,status:'Approved'}}).ok,false);
+ assert.equal(b.call('editLeave',{id:'lv',record:{...record,start:'invalid'}}).ok,false);
+ assert.equal(b.call('editLeave',{id:'lv',record:{...record,type:'Unknown'}}).ok,false);
+});
+test('leave edits cannot overlap another non-rejected request',()=>{
+ const b=backend('e@company.test');assert.equal(b.call('create',{collection:'leaves',record:{type:'Sick',start:'2026-10-25',end:'2026-10-26',reason:'Rest'}}).ok,true);
+ assert.equal(b.call('editLeave',{id:'lv',record:{type:'Casual',start:'2026-10-24',end:'2026-10-26',reason:'Overlap'}}).ok,false);
+});
+test('only the owner can edit or delete a pending request, and reviewed requests are locked',()=>{
+ for(const email of ['admin@company.test','h@company.test','x@company.test']){const b=backend(email);assert.equal(b.call('editLeave',{id:'lv',record:{type:'Sick',start:'2026-10-20',end:'2026-10-21',reason:'No'}}).ok,false);assert.equal(b.call('deleteLeave',{id:'lv'}).ok,false);}
+ for(const status of ['Approved','Rejected']){const b=backend('e@company.test');b.sheets.leaves[1][6]=status;assert.equal(b.call('deleteLeave',{id:'lv'}).ok,false);assert.equal(b.call('editLeave',{id:'lv',record:{type:'Sick',start:'2026-10-20',end:'2026-10-21',reason:'No'}}).ok,false);}
+});
+test('employee deletes own pending leave and deletion is audited',()=>{
+ const b=backend('e@company.test');assert.equal(b.call('deleteLeave',{id:'lv'}).ok,true);assert.equal(b.sheets.leaves.length,1);assert.equal(b.sheets.audit.at(-1)[2],'deleteLeave');assert.equal(b.call('deleteLeave',{id:'lv'}).ok,false);
 });

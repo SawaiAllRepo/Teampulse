@@ -1,8 +1,8 @@
-﻿# TeamPulse - this Sheet is already configured
+# TeamPulse - this Sheet is already configured
 
 Sheet: https://docs.google.com/spreadsheets/d/1zsY6TWHvstFcN39kAGQziLwJG-jztdGwllS3SU-RxLs/edit
 
-Status: local code/package ready. Real Sheet access, Google authorization, tab creation and deployment are NOT completed yet. No data has been written to the Sheet from this environment.
+Status (28 October 2026): the configured Apps Script endpoint is reachable and returns an authenticated-session requirement. Updated local code/package is ready. The updated version has not been deployed from this environment, and live spreadsheet writes have not been verified. See [CRUD verification](crud-verification.md).
 
 ## Remaining account steps
 

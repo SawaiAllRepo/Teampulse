@@ -90,7 +90,7 @@ Email-first lookup intentionally reveals only whether credentials exist for the 
 
 Run npm test to verify backend, attendance, location and proxy behavior. Tests cover registration defaults, bcrypt verification, approval, role boundaries, lockout, expiry, logout, password changes and module persistence with mocked Google services. Actual registration, authorization and Sheet writes must be checked after connecting and deploying the real Sheet. Browser visual verification failed because the automation runtime could not start in this environment. No real account, password, deployment or Sheet was created during local implementation.
 
-Password recovery, separate team membership editing, task comments/history, notifications, exports and advanced reports remain future work. Load-test Apps Script before a large rollout.
+Password recovery, separate team membership editing, task comments/history and advanced reports remain future work. In-app notifications and attendance Excel exports are implemented. Load-test Apps Script before a large rollout.
 
 Brand reference: https://www.sawaiassociates.com/ inspected 14 October 2026. Actual bundled Sawai logo; navy #0B1F44, pink #E6007E, background #F5F7FB. Sidebar navigation scrolls independently while brand/profile remain visible.
 
@@ -149,3 +149,7 @@ Source changes belong in `src/`, not generated `deployment/Index.html`. The orig
 ## Four-role test cases
 
 Run `npm run test:roles` for 40 dedicated Employee, Admin, Team Leader and HR cases. The full `npm test` suite now passes 235 tests. See [test cases and execution report](docs/role-test-cases.md) for steps, expected results and recorded outcomes.
+
+## CRUD completion (28 October 2026)
+
+Record editors and role-restricted deletion are connected to the Google Sheets API across the business modules. See [CRUD coverage, persistence checks and live deployment status](docs/crud-verification.md). The configured Apps Script endpoint is reachable; deploying the updated backend/frontend and verifying signed-in live Sheet writes remain required.
