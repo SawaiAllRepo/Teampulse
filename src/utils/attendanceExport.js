@@ -16,11 +16,11 @@ export async function attendanceWorkbook(rows,employee){
  const ExcelJS=excelModule.default||excelModule;
  const workbook=new ExcelJS.Workbook();
  const sheet=workbook.addWorksheet('Login logout');
- sheet.columns=[{header:'Employee',key:'name',width:30},{header:'Employee ID',key:'employeeId',width:24},{header:'Attendance date (IST)',key:'date',width:24},{header:'Login / punch in (IST)',key:'login',width:26},{header:'Logout / punch out (IST)',key:'logout',width:26}];
- for(const row of rows)sheet.addRow({name:String(employee(row.employeeId)),employeeId:String(row.employeeId),date:indiaDate(row.date),login:punchTime(row.checkIn),logout:punchTime(row.checkOut)});
+ sheet.columns=[{header:'Employee',key:'name',width:30},{header:'Employee ID',key:'employeeId',width:24},{header:'Attendance date (IST)',key:'date',width:24},{header:'Login / punch in (IST)',key:'login',width:26},{header:'Logout / punch out (IST)',key:'logout',width:26},{header:'Work mode',key:'workMode',width:24}];
+ for(const row of rows)sheet.addRow({name:String(employee(row.employeeId)),employeeId:String(row.employeeId),date:indiaDate(row.date),login:punchTime(row.checkIn),logout:punchTime(row.checkOut),workMode:row.workMode==='Work from office'?'WFO':row.workMode==='Work from home'?'WFH':row.workMode||'Not specified'});
  sheet.getRow(1).font={bold:true};
  sheet.views=[{state:'frozen',ySplit:1}];
- sheet.autoFilter='A1:E'+Math.max(1,sheet.rowCount);
+ sheet.autoFilter='A1:F'+Math.max(1,sheet.rowCount);
  return workbook.xlsx.writeBuffer();
 }
 export async function downloadAttendance(rows,employee,date='',employeeId='',endDate=date){
