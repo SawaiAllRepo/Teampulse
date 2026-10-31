@@ -1,0 +1,22 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {MessageCircle,Send,X} from 'lucide-react';
+import {request} from '../data/client.js';
+import {usePreferences} from './PreferencesProvider.jsx';
+export default function Messenger({me,peer,onPeer}){
+ const {t}=usePreferences();
+ const [snapshot,setSnapshot]=useState({messages:[],people:[]}),[drafts,setDrafts]=useState({}),[error,setError]=useState(''),[sending,setSending]=useState(false),[loading,setLoading]=useState(true);
+ const version=useRef(0),bottom=useRef(null),sendLock=useRef(false);
+ const messages=snapshot.messages,person=id=>snapshot.people.find(p=>p.id===id)||{id,name:t('Former teammate'),status:'Inactive'};
+ const peers=[...new Set(messages.flatMap(m=>[m.senderId,m.recipientId]).filter(id=>id!==me.id))].map(person);
+ const unread=id=>messages.filter(m=>m.senderId===id&&m.recipientId===me.id&&!m.readAt).length;
+ useEffect(()=>{let active=true,inFlight=false;
+  async function refresh(){if(inFlight||sendLock.current||document.visibilityState==='hidden')return;inFlight=true;const current=++version.current;try{const data=await request('messageSnapshot',{peerId:peer?.id});if(active&&current===version.current){setSnapshot(data);setError('');}}catch(e){if(active&&current===version.current)setError(e.message);}finally{inFlight=false;if(active)setLoading(false);}}
+  setLoading(true);refresh();const timer=setInterval(refresh,10000);return()=>{active=false;version.current++;clearInterval(timer);};
+ },[peer?.id]);
+ const thread=peer?messages.filter(m=>m.senderId===peer.id||m.recipientId===peer.id).sort((a,b)=>a.created.localeCompare(b.created)):[];
+ useEffect(()=>{bottom.current?.scrollIntoView({block:'nearest'});},[peer?.id,thread.length]);
+ async function send(event){event.preventDefault();const id=peer?.id,body=(drafts[id]||'').trim();if(!body||sendLock.current)return;sendLock.current=true;setSending(true);setError('');const current=++version.current;
+  try{const data=await request('sendMessage',{recipientId:id,body,peerId:id});if(current===version.current)setSnapshot(data);setDrafts(old=>({...old,[id]:''}));}catch(e){setError(e.message);}finally{sendLock.current=false;setSending(false);}
+ }
+ return <section className="panel messenger" aria-label={t('Team messages')}><div className="panelhead"><h3><MessageCircle size={18}/> {t('Messages')}</h3><small>{t('Updates every 10 seconds while this page is open')}</small></div>{error&&<p className="error" role="alert">{error}</p>}<div className="messengerlayout"><div className="conversationlist">{!peers.length&&<p className="muted">{t('Choose Message on a teammate card to start a conversation.')}</p>}{peers.map(p=><button key={p.id} className={peer?.id===p.id?'selected':''} onClick={()=>onPeer(p)}><span>{p.name}</span>{unread(p.id)>0&&<b aria-label={t('Unread messages')}>{unread(p.id)}</b>}</button>)}</div>{peer?<div className="conversation"><div className="panelhead"><h3>{peer.name}</h3><button type="button" aria-label={t('Close conversation')} onClick={()=>onPeer(null)}><X size={18}/></button></div><div className="messagehistory" role="log" aria-label={t('Conversation with {name}',{name:peer.name})} aria-live="polite">{loading&&!thread.length?<p>{t('Loading messages...')}</p>:!thread.length&&<p className="muted">{t('No messages yet. Say hello!')}</p>}{thread.map(m=><div key={m.id} className={'messagebubble '+(m.senderId===me.id?'sent':'received')}><p>{m.body}</p><small>{new Date(m.created).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} IST{m.senderId===me.id&&m.readAt?' ? Read':''}</small></div>)}<div ref={bottom}/></div><form onSubmit={send}><label htmlFor="message-body">{t('Your message')}</label><textarea id="message-body" rows={3} maxLength={2000} value={drafts[peer.id]||''} onChange={e=>setDrafts(old=>({...old,[peer.id]:e.target.value}))} placeholder={t('Type a message...')} disabled={sending||peer.status!=='Active'}/><div className="actions"><small>{(drafts[peer.id]||'').length}/2000</small><button className="primary" disabled={sending||peer.status!=='Active'||!(drafts[peer.id]||'').trim()}><Send size={16}/>{t(sending?'Sending...':'Send message')}</button></div>{peer.status!=='Active'&&<p className="muted">{t('This teammate is unavailable for new messages.')}</p>}</form></div>:<p className="muted">{t('Select a conversation or message a teammate below.')}</p>}</div></section>;
+}

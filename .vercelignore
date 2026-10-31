@@ -9,3 +9,7 @@ TeamPulse-AppsScript.zip
 tests
 
 backups/
+
+# Temporary verification artifacts
+outputs/
+docs/

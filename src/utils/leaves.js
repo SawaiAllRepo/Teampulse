@@ -1,4 +1,4 @@
-export const leaveTypes=['Casual','Sick','Earned/Annual','Unpaid','Other'];
+export const leaveTypes=['Casual','Sick','Earned/Annual','Unpaid','Other','Work from home (WFH)'];
 export const defaultLeavePolicy={workingDays:[1,2,3,4,5,6],holidays:[],approverId:''};
 export function leaveUnits(record,policy=defaultLeavePolicy){
  const start=Date.parse(record.start+'T00:00:00Z'),end=Date.parse(record.end+'T00:00:00Z');

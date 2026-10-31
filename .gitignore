@@ -10,3 +10,6 @@ deployment/
 TeamPulse-AppsScript.zip
 
 backups/
+
+# Temporary verification artifacts
+outputs/

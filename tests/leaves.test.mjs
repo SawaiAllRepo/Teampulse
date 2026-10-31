@@ -26,7 +26,7 @@ test('server calculates totals and ownership, ignores forged approval and approv
  const b=backend('e@company.test');const result=b.call('create',{collection:'leaves',record:record({totalDays:'999',employeeId:'x',status:'Approved',approverId:'e',rejectionReason:'spoof'})});assert.equal(result.ok,true,result.error);const leave=result.data.db.leaves.at(-1);assert.equal(leave.employeeId,'e');assert.equal(leave.status,'Pending');assert.equal(leave.totalDays,'5');assert.equal(leave.approverId,'h');assert.equal(leave.rejectionReason,'');
 });
 test('all leave types are supported and invalid duration or non-working-only requests are rejected',()=>{
- for(const type of ['Casual','Sick','Earned/Annual','Earned','Unpaid','Other']){const b=backend('e@company.test');assert.equal(b.call('create',{collection:'leaves',record:record({type})}).ok,true,type);}
+ for(const type of ['Casual','Sick','Earned/Annual','Earned','Unpaid','Other','Work from home (WFH)']){const b=backend('e@company.test');assert.equal(b.call('create',{collection:'leaves',record:record({type})}).ok,true,type);}
  for(const invalid of [{type:'Unknown'},{duration:'Quarter day'},{duration:'Half day',half:'First half'},{end:'2026-11-02',duration:'Half day',half:''},{start:'2026-11-08',end:'2026-11-08'},{start:'2026-02-30',end:'2026-03-02'}]){const b=backend('e@company.test');assert.equal(b.call('create',{collection:'leaves',record:record(invalid)}).ok,false,JSON.stringify(invalid));}
 });
 test('leave settings validate roles, holidays, working days and eligible approvers',()=>{
@@ -60,3 +60,42 @@ test('legacy leave sheets remain readable and migrate on write while preserving 
 test('Monday through Saturday is the default work week, with Sunday excluded',()=>{assert.deepEqual(defaultLeavePolicy.workingDays,[1,2,3,4,5,6]);assert.equal(totalLeaveDays(record({start:'2026-11-07',end:'2026-11-07'})),1);assert.equal(totalLeaveDays(record({start:'2026-11-08',end:'2026-11-08'})),0);});
 
 test('overlap checks ignore shared non-working days',()=>{assert.equal(leaveOverlaps(record({start:'2026-11-07',end:'2026-11-08'}),record({start:'2026-11-08',end:'2026-11-09'})),false);});
+
+
+test('WFH requests support half days, editing, approval and conflict checks with leave',()=>{
+ const b=backend('e@company.test');
+ const request=record({type:'Work from home (WFH)',end:'2026-11-02',duration:'Half day',half:'First half'});
+ const result=b.call('create',{collection:'leaves',record:request});assert.equal(result.ok,true,result.error);
+ const saved=result.data.db.leaves.at(-1);assert.equal(saved.type,request.type);assert.equal(saved.totalDays,'0.5');assert.equal(saved.status,'Pending');
+ assert.equal(b.call('create',{collection:'leaves',record:record({end:'2026-11-02'})}).ok,false);
+ const edited=b.call('editLeave',{id:saved.id,record:{...request,reason:'Working remotely'}});assert.equal(edited.ok,true,edited.error);
+ const hr=b.call('login',{email:'h@company.test',password},'').data.token;
+ const approved=b.call('leaveDecision',{id:saved.id,status:'Approved'},hr);assert.equal(approved.ok,true,approved.error);
+ assert.equal(approved.data.db.leaves.find(row=>row.id===saved.id).status,'Approved');
+ assert.equal(b.call('editLeave',{id:saved.id,record:request}).ok,false);
+});
+
+test('leader submits a group for active team members with shared ID and independent approval',()=>{
+ const b=backend('l@company.test');b.properties.LEAVE_POLICY=JSON.stringify({...policy,approverId:'l'});
+ const result=b.call('createGroupLeave',{employeeIds:['l','e'],record:record({type:'Work from home (WFH)'})});
+ assert.equal(result.ok,true,result.error);const requests=result.data.db.leaves.filter(r=>r.submittedBy==='l');
+ assert.equal(requests.length,2);assert.equal(requests[0].groupId,requests[1].groupId);assert.ok(requests[0].groupId);
+ for(const r of requests){assert.equal(r.approverId,'h');assert.equal(r.status,'Pending');assert.equal(b.call('leaveDecision',{id:r.id,status:'Approved'}).ok,false);}
+ const employee=b.call('login',{email:'e@company.test',password},'').data.token;
+ assert.ok(b.call('bootstrap',{},employee).data.db.leaves.some(r=>r.id===requests.find(r=>r.employeeId==='e').id));
+ const hr=b.call('login',{email:'h@company.test',password},'').data.token;
+ assert.equal(b.call('leaveDecision',{id:requests[0].id,status:'Approved'},hr).ok,true);
+});
+test('group requests reject outsiders, duplicates, inactive members and non-leaders without writes',()=>{
+ for(const ids of [[],['x'],['e','e'],['e','missing']]){const b=backend('l@company.test');const before=b.sheets.leaves.length;assert.equal(b.call('createGroupLeave',{employeeIds:ids,record:record()}).ok,false);assert.equal(b.sheets.leaves.length,before);}
+ for(const email of ['e@company.test','admin@company.test'])assert.equal(backend(email).call('createGroupLeave',{employeeIds:['e'],record:record()}).ok,false);
+ const b=backend('l@company.test');b.sheets.employees.find(r=>r[0]==='e')[b.sheets.employees[0].indexOf('status')]='Inactive';assert.equal(b.call('createGroupLeave',{employeeIds:['e'],record:record()}).ok,false);
+});
+test('group validates all members before saving and exposes only eligible team choices',()=>{
+ const b=backend('l@company.test');const db=b.call('bootstrap').data.db;
+ assert.deepEqual(Array.from(db.leaveRequestMembers,r=>r.id).sort(),['e','l']);
+ const employee=b.call('login',{email:'e@company.test',password},'').data.token;
+ assert.equal(b.call('create',{collection:'leaves',record:record()},employee).ok,true);
+ const before=b.sheets.leaves.length;const result=b.call('createGroupLeave',{employeeIds:['l','e'],record:record()});
+ assert.equal(result.ok,false);assert.match(result.error,/overlaps/);assert.equal(b.sheets.leaves.length,before);
+});

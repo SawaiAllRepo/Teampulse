@@ -64,3 +64,12 @@ test('leave editor shows account name, required details and calculated half-day 
 });
 
 test('employee account sees only department teammates without management controls or private contacts',async t=>{globalThis.sessionStorage={getItem:()=>null};t.after(()=>{delete globalThis.sessionStorage;});const server=await createServer({server:{middlewareMode:true},appType:'custom'});t.after(()=>server.close());const {default:Screen}=await server.ssrLoadModule('/src/pages/Employees.jsx');const me={id:'e',name:'Employee One',role:'Employee',status:'Active',department:'Software Developer',email:'own@example.test'};const other={id:'x',name:'Employee Two',role:'Employee',status:'Active',department:'Software Engineer'};const html=renderToStaticMarkup(React.createElement(Screen,{db:{employees:[me],employeeDirectory:[{id:me.id,name:me.name,role:me.role,status:me.status,department:me.department},other,{id:'outside',name:'Outside Department',department:'HR',role:'Employee',status:'Active'}],teamPresence:[]},me,role:'Employee',admin:false,search:'',filtered:rows=>rows,initials:()=> 'E',badge:value=>value,setSearch:()=>{}}));assert.equal((html.match(/class="personcard"/g)||[]).length,2);assert.ok(html.includes('Employee Two'));assert.equal(html.includes('Outside Department'),false);assert.ok(html.includes('2 teammates'));assert.equal(html.includes('Delete employee'),false);assert.equal(html.includes('>Edit</button>'),false);});
+
+test('group leave selection is available to leaders and includes select-all and member checkboxes',async t=>{
+ const server=await createServer({server:{middlewareMode:true},appType:'custom'});t.after(()=>server.close());
+ const {default:Editor}=await server.ssrLoadModule('/src/components/LeaveEditor.jsx');
+ for(const role of ['Team Leader','Employee']){
+ const html=renderToStaticMarkup(React.createElement(Editor,{user:{id:'l',name:'Leader',role},db:{employees:[],leaveRequestMembers:[{id:'e',name:'Member'}]},busy:false,onClose:()=>{},mutate:()=>{}}));
+ assert.equal(html.includes('Team / group'),role==='Team Leader');
+ }
+});

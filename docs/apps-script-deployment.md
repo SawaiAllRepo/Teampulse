@@ -2,7 +2,7 @@
 
 Sheet: https://docs.google.com/spreadsheets/d/1zsY6TWHvstFcN39kAGQziLwJG-jztdGwllS3SU-RxLs/edit
 
-Status (28 October 2026): the configured Apps Script endpoint is reachable and returns an authenticated-session requirement. Updated local code/package is ready. The updated version has not been deployed from this environment, and live spreadsheet writes have not been verified. See [CRUD verification](crud-verification.md).
+Builds produce the local upload package. Updating the live deployment and verifying real Sheet writes are separate steps.
 
 ## Remaining account steps
 
@@ -12,7 +12,7 @@ Status (28 October 2026): the configured Apps Script endpoint is reachable and r
 4. Script Properties: add ADMIN_EMAIL (your email) and ADMIN_INITIAL_PASSWORD (a new TeamPulse password of at least 12 characters, maximum 72 UTF-8 bytes). Enter the password privately in Google, not in chat. SPREADSHEET_ID is already configured in Code.gs and does not need another property.
 5. Select setup from the function dropdown and click Run. Approve the requested Google spreadsheet permission. Setup creates employees, projects, tasks, attendance, worklogs, leaves, announcements, audit, credentials and sessions tabs. The initial password is hashed, then removed from Script Properties.
 6. Deploy > New deployment > Web app. Execute as yourself. Set Who has access to Anyone (not Anyone with a Google account), as approved by the owner. Existing deployments: Deploy > Manage deployments > Edit (pencil) > Version: New version > Deploy. Upload the supplied manifest as well if needed. The live setting must be saved in Google; changing local files alone does not update it. Open the returned /exec URL and log in with the initial Admin credentials.
-7. Test a new account: new email > create password/profile > approve in Employees as Admin > log in as that employee > punch in/out and create a work log. Check the corresponding spreadsheet rows. Create a project/task as Admin and verify those rows too.
+7. Test a new account: new email > create password/profile > approve in Employees as Admin > log in as that employee > punch in/out. Check the corresponding spreadsheet rows. Create a project/task as Admin and verify those rows too.
 
 If organization policy prevents the Anyone option, the owner must resolve that policy restriction. Keep the underlying spreadsheet private.
 
@@ -29,3 +29,19 @@ A separate .gs file may be used instead of the combined file, but never include 
 Replace Code.gs with the complete generated deployment/Code.gs (including authentication and bcrypt); do not leave older Auth.gs or Bcrypt.gs alongside this combined file. Replace Index with the complete deployment/Index.html. Save both, then edit the existing deployment and choose New version before deploying. Reopen its /exec URL.
 
 When using Vercel or localhost, APPS_SCRIPT_URL must point to this updated deployment. Creating a different deployment leaves an old configured URL serving old code. If the URL changed, update the local or hosting environment and restart/redeploy the frontend. Updating HTML alone does not update backend actions.
+
+## Work-from-home requests
+
+Open Leave / WFH requests > Request leave / WFH and select Work from home (WFH). Enter the dates, full-day or half-day duration, and reason. WFH requests use the configured working calendar and designated approver; employees can edit or delete their own pending requests. Overlapping leave and WFH requests are blocked. WFH is stored as its own request type in the existing leaves sheet. Attendance punch-in and punch-out remain separate.
+
+Deploy both updated Code.gs and Index.html from the deployment folder using a new Apps Script deployment version to enable this feature live.
+
+## Teammate messaging
+
+Open Teammates (Employees for Admin/HR), then click Message on an active teammate card. Type your message and select Send message. The Messages panel lists conversations and unread counts. It refreshes every 10 seconds while this page is visible; open a conversation to read replies. Messages support up to 2,000 characters. Only the sender and recipient can retrieve a conversation through the app, including for Admin/HR users. Spreadsheet owners retain direct access to the underlying sheet.
+
+The messages sheet is created automatically on the first send, or by setup(). Deploy the updated Code.gs and Index.html as a new Apps Script version. Existing spreadsheet records are preserved.
+
+## Team leader group requests
+
+In Leave / WFH requests > Request leave / WFH, Team Leaders can choose Apply for > Team / group. Select individual team members or Select all (including the leader), then enter the shared request type, dates, duration and reason. Eligible members are active assignees on the leader's owned projects or directly managed tasks, plus the leader. Every member gets a separate pending request with a shared Group ID. All requests are checked before saving; a conflict prevents the whole submission. The submitting leader can track these requests but cannot approve them; HR/Admin is used if the leader was the configured approver. Employees retain control of their own pending requests. Deploy both generated Code.gs and Index.html as a new version.
