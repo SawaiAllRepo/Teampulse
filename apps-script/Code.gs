@@ -294,7 +294,7 @@ function hoursLabel(minutes){return Math.floor(minutes/60)+'h '+minutes%60+'m';}
 // Mail errors must never turn a saved leave into a failed submission.
 function notifyLeaveAdmins_(employee,leave){
  try{
-  const recipients=['piyalikushwah672@gmail.com']; // Temporary leave notification recipient.
+  const recipients=['asawai7875@gmail.com','bhushanchaudhari@gritznova.com','hr@sawaiassociates.com']; // Leave and WFH notification recipients.
   require_(recipients.length>0,'No active Admin email is configured.');
   const body=[
    leave.type==='Work from home (WFH)'?'A new WFH request is awaiting review in TeamPulse.':'A new leave request is awaiting review in TeamPulse.',

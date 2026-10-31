@@ -101,7 +101,7 @@ Attendance snapshots refresh approximately every 10 seconds while the page is vi
 ## Leave management
 Requests support leave types, date ranges, full-day or half-day duration and a reason. Working days and holidays influence calculated totals. Policy can designate an approver. Approval and rejection are permission checked; rejection requires a reason. Eligible pending requests can be edited or deleted, and overlap validation applies.
 
-New leave emails currently use the fixed temporary recipient piyalikushwah672@gmail.com in notifyLeaveAdmins_. The code does not automatically discover all Admin or HR recipients. Review this configuration before changing operational recipients.
+New leave/WFH emails use asawai7875@gmail.com, bhushanchaudhari@gritznova.com and hr@sawaiassociates.com in notifyLeaveAdmins_. The code does not automatically discover all Admin or HR recipients. Review this configuration before changing operational recipients.
 
 ## Tasks and projects
 Tasks use Low, Medium, High and Urgent priorities. Statuses include To do, In progress, Blocked, In review and Completed. The application recognizes the legacy Done status as Completed. Attachment links are validated as HTTP or HTTPS URLs.
