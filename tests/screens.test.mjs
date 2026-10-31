@@ -68,8 +68,8 @@ test('employee account sees only department teammates without management control
 test('group leave selection is available to leaders and includes select-all and member checkboxes',async t=>{
  const server=await createServer({server:{middlewareMode:true},appType:'custom'});t.after(()=>server.close());
  const {default:Editor}=await server.ssrLoadModule('/src/components/LeaveEditor.jsx');
- for(const role of ['Team Leader','Employee']){
+ for(const role of ['Team Leader','Admin','Employee','HR']){
  const html=renderToStaticMarkup(React.createElement(Editor,{user:{id:'l',name:'Leader',role},db:{employees:[],leaveRequestMembers:[{id:'e',name:'Member'}]},busy:false,onClose:()=>{},mutate:()=>{}}));
- assert.equal(html.includes('Team / group'),role==='Team Leader');
+ assert.equal(html.includes('Team / group'),['Team Leader','Admin'].includes(role));
  }
 });

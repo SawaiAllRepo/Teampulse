@@ -10,7 +10,7 @@ Builds produce the local upload package. Updating the live deployment and verify
 2. Run `npm run build`, then paste deployment/Code.gs into the editor's Code.gs. It already contains the backend, authentication and bcrypt library; do not also add separate Auth.gs/Bcrypt.gs copies. Add an HTML file named Index and paste Index.html.
 3. Project Settings: enable the manifest and replace appsscript.json with the supplied manifest.
 4. Script Properties: add ADMIN_EMAIL (your email) and ADMIN_INITIAL_PASSWORD (a new TeamPulse password of at least 12 characters, maximum 72 UTF-8 bytes). Enter the password privately in Google, not in chat. SPREADSHEET_ID is already configured in Code.gs and does not need another property.
-5. Select setup from the function dropdown and click Run. Approve the requested Google spreadsheet permission. Setup creates employees, projects, tasks, attendance, worklogs, leaves, announcements, audit, credentials and sessions tabs. The initial password is hashed, then removed from Script Properties.
+5. Select setup from the function dropdown and click Run. Approve the requested Google spreadsheet permission. Setup creates employees, projects, tasks, attendance, worklogs, leaves, announcements, messages, settings, accessEvents, audit, credentials and sessions tabs. The initial password is hashed, then removed from Script Properties.
 6. Deploy > New deployment > Web app. Execute as yourself. Set Who has access to Anyone (not Anyone with a Google account), as approved by the owner. Existing deployments: Deploy > Manage deployments > Edit (pencil) > Version: New version > Deploy. Upload the supplied manifest as well if needed. The live setting must be saved in Google; changing local files alone does not update it. Open the returned /exec URL and log in with the initial Admin credentials.
 7. Test a new account: new email > create password/profile > approve in Employees as Admin > log in as that employee > punch in/out. Check the corresponding spreadsheet rows. Create a project/task as Admin and verify those rows too.
 
@@ -44,4 +44,23 @@ The messages sheet is created automatically on the first send, or by setup(). De
 
 ## Team leader group requests
 
-In Leave / WFH requests > Request leave / WFH, Team Leaders can choose Apply for > Team / group. Select individual team members or Select all (including the leader), then enter the shared request type, dates, duration and reason. Eligible members are active assignees on the leader's owned projects or directly managed tasks, plus the leader. Every member gets a separate pending request with a shared Group ID. All requests are checked before saving; a conflict prevents the whole submission. The submitting leader can track these requests but cannot approve them; HR/Admin is used if the leader was the configured approver. Employees retain control of their own pending requests. Deploy both generated Code.gs and Index.html as a new version.
+In Leave / WFH requests > Request leave / WFH, Team Leaders and Admins can choose Apply for > Team / group. Select individual team members or Select all (including the leader), then enter the shared request type, dates, duration and reason. All active members are available, including members without assigned projects or tasks. Every member gets a separate pending request with a shared Group ID. All requests are checked before saving; a conflict prevents the whole submission. The submitter can track these requests but cannot approve them; another eligible HR/Admin is used if the submitter was the configured approver. Employees retain control of their own pending requests. Deploy both generated Code.gs and Index.html as a new version.
+
+## Google Sheets backend storage
+
+All business records use the configured private spreadsheet through Apps Script. The local/Vercel frontend forwards requests to APPS_SCRIPT_URL; the Apps Script-hosted frontend calls the same backend directly.
+
+| Feature | Sheet tab |
+| --- | --- |
+| Accounts, roles and profiles | employees |
+| Password hashes and login sessions | credentials, sessions |
+| Projects and task progress | projects, tasks |
+| Punch times, work mode and locations | attendance, accessEvents |
+| Individual/group leave and WFH requests | leaves |
+| Announcements and teammate messages | announcements, messages |
+| Working days, holidays and leave approver | settings (leavePolicy) |
+| Audit history and legacy work logs | audit, worklogs |
+
+Existing LEAVE_POLICY Script Properties remain readable until a Sheet policy is saved. Running setup copies an existing legacy policy into settings without replacing a saved Sheet policy. Saving Leave settings creates the settings tab if missing. Raw settings are not included in client bootstrap data; only the leave policy is returned. Runtime deployment configuration and authentication rate limits remain in Script Properties. Browser theme and notification-read preferences remain local.
+
+After uploading the generated files and deploying a new version, sign in and verify a real create/update in the corresponding tab. An unauthenticated bootstrap checks API reachability only; it cannot verify real record writes. No live deployment or authenticated Sheet writes were performed by the local build.

@@ -10,3 +10,13 @@ export function leaveUnits(record,policy=defaultLeavePolicy){
 }
 export function totalLeaveDays(record,policy=defaultLeavePolicy){return leaveUnits(record,policy).reduce((days,unit)=>days+(unit.mask===3?1:0.5),0);}
 export function leaveOverlaps(a,b,policy=defaultLeavePolicy){const other=new Map(leaveUnits(b,policy).map(unit=>[unit.day,unit.mask]));return leaveUnits(a,policy).some(unit=>(other.get(unit.day)||0)&unit.mask);}
+
+// Older deployments expose the complete active directory as taskAssignees.
+export function groupRequestMembers(db,user){
+ if(!['Team Leader','Admin'].includes(user?.role))return [];
+ const members=new Map();
+ for(const person of [...(db.employees||[]).filter(e=>e.status==='Active'),...(db.taskAssignees||[]),...(db.leaveRequestMembers||[])]){
+  if(person&&typeof person.id==='string'&&person.id&&typeof person.name==='string'&&person.name.trim()&&(!person.status||person.status==='Active'))members.set(person.id,{id:person.id,name:person.name.trim()});
+ }
+ return [...members.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}

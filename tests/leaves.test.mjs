@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {backend,password} from './helpers/backend.mjs';
-import {totalLeaveDays,leaveOverlaps,leaveUnits,defaultLeavePolicy} from '../src/utils/leaves.js';
+import {totalLeaveDays,leaveOverlaps,leaveUnits,defaultLeavePolicy,groupRequestMembers} from '../src/utils/leaves.js';
 const record=(more={})=>({type:'Casual',start:'2026-11-02',end:'2026-11-06',duration:'Full day',half:'',reason:'Family commitment',...more});
 const created=b=>b.call('create',{collection:'leaves',record:record()});
 const policy={workingDays:[1,2,3,4,5],holidays:['2026-11-04'],approverId:'l'};
@@ -32,7 +32,7 @@ test('all leave types are supported and invalid duration or non-working-only req
 test('leave settings validate roles, holidays, working days and eligible approvers',()=>{
  assert.equal(backend('e@company.test').call('saveLeavePolicy',{policy}).ok,false);assert.equal(backend('l@company.test').call('saveLeavePolicy',{policy}).ok,false);
  for(const invalid of [{...policy,workingDays:[]},{...policy,workingDays:[1,1]},{...policy,holidays:['2026-02-30']},{...policy,approverId:'e'}])assert.equal(backend().call('saveLeavePolicy',{policy:invalid}).ok,false);
- const b=backend();const result=b.call('saveLeavePolicy',{policy});assert.equal(result.ok,true,result.error);assert.deepEqual(JSON.parse(b.properties.LEAVE_POLICY),policy);
+ const b=backend();const result=b.call('saveLeavePolicy',{policy});assert.equal(result.ok,true,result.error);assert.deepEqual(JSON.parse(b.sheets.settings.find(row=>row[0]==='leavePolicy')[1]),policy);
 });
 test('designated team leader receives requests and can decide them; unrelated reviewers cannot',()=>{
  const b=backend('e@company.test');b.properties.LEAVE_POLICY=JSON.stringify(policy);const result=created(b);assert.equal(result.ok,true,result.error);const leave=result.data.db.leaves.at(-1);assert.equal(leave.totalDays,'4');assert.equal(leave.approverId,'l');
@@ -86,16 +86,43 @@ test('leader submits a group for active team members with shared ID and independ
  const hr=b.call('login',{email:'h@company.test',password},'').data.token;
  assert.equal(b.call('leaveDecision',{id:requests[0].id,status:'Approved'},hr).ok,true);
 });
-test('group requests reject outsiders, duplicates, inactive members and non-leaders without writes',()=>{
- for(const ids of [[],['x'],['e','e'],['e','missing']]){const b=backend('l@company.test');const before=b.sheets.leaves.length;assert.equal(b.call('createGroupLeave',{employeeIds:ids,record:record()}).ok,false);assert.equal(b.sheets.leaves.length,before);}
- for(const email of ['e@company.test','admin@company.test'])assert.equal(backend(email).call('createGroupLeave',{employeeIds:['e'],record:record()}).ok,false);
+test('group requests reject unknown, duplicate, inactive members and unauthorized roles without writes',()=>{
+ for(const ids of [[],['unknown'],['e','e'],['e','missing']]){const b=backend('l@company.test');const before=b.sheets.leaves.length;assert.equal(b.call('createGroupLeave',{employeeIds:ids,record:record()}).ok,false);assert.equal(b.sheets.leaves.length,before);}
+ for(const email of ['e@company.test','h@company.test'])assert.equal(backend(email).call('createGroupLeave',{employeeIds:['e'],record:record()}).ok,false);
  const b=backend('l@company.test');b.sheets.employees.find(r=>r[0]==='e')[b.sheets.employees[0].indexOf('status')]='Inactive';assert.equal(b.call('createGroupLeave',{employeeIds:['e'],record:record()}).ok,false);
 });
 test('group validates all members before saving and exposes only eligible team choices',()=>{
  const b=backend('l@company.test');const db=b.call('bootstrap').data.db;
- assert.deepEqual(Array.from(db.leaveRequestMembers,r=>r.id).sort(),['e','l']);
+ assert.deepEqual(Array.from(db.leaveRequestMembers,r=>r.id).sort(),['a','e','h','l','x']);
  const employee=b.call('login',{email:'e@company.test',password},'').data.token;
  assert.equal(b.call('create',{collection:'leaves',record:record()},employee).ok,true);
  const before=b.sheets.leaves.length;const result=b.call('createGroupLeave',{employeeIds:['l','e'],record:record()});
  assert.equal(result.ok,false);assert.match(result.error,/overlaps/);assert.equal(b.sheets.leaves.length,before);
+});
+
+test('Admin and Team Leader can request leave for all active members including unassigned employees',()=>{
+ for(const email of ['admin@company.test','l@company.test']){
+ const b=backend(email),members=b.call('bootstrap').data.db.leaveRequestMembers;
+ assert.deepEqual(Array.from(members,m=>m.id).sort(),['a','e','h','l','x']);
+ const result=b.call('createGroupLeave',{employeeIds:Array.from(members,m=>m.id),record:record()});
+ assert.equal(result.ok,true,result.error);const requests=result.data.db.leaves.filter(r=>r.groupId);
+ assert.equal(requests.length,5);for(const r of requests){assert.notEqual(r.approverId,r.submittedBy);assert.notEqual(r.approverId,r.employeeId);}
+ }
+});
+
+test('leave settings persist in Sheets, override legacy properties, and do not expose raw settings',()=>{
+ const b=backend();delete b.sheets.settings;b.properties.LEAVE_POLICY=JSON.stringify({...policy,holidays:[]});
+ assert.equal(b.call('bootstrap').data.db.leavePolicy.holidays.length,0);
+ let result=b.call('saveLeavePolicy',{policy});assert.equal(result.ok,true,result.error);
+ assert.deepEqual(JSON.parse(b.sheets.settings[1][1]),policy);assert.equal(b.sheets.settings[1][3],'a');
+ const changed={...policy,holidays:['2026-11-05']};result=b.call('saveLeavePolicy',{policy:changed});assert.equal(result.ok,true,result.error);
+ assert.equal(b.sheets.settings.length,2);assert.deepEqual(JSON.parse(b.sheets.settings[1][1]),changed);
+ assert.equal(result.data.db.settings,undefined);assert.deepEqual(JSON.parse(JSON.stringify(b.call('bootstrap').data.db.leavePolicy)),changed);
+});
+
+test('group employee names use the full active directory when the group list is missing or empty',()=>{
+ const db={employees:[{id:'l',name:'Leader',status:'Active'},{id:'off',name:'Inactive',status:'Inactive'}],taskAssignees:[{id:'z',name:'Zoya'},{id:'a',name:'Amit'}],leaveRequestMembers:[]};
+ assert.deepEqual(groupRequestMembers(db,{role:'Team Leader'}).map(m=>m.name),['Amit','Leader','Zoya']);
+ assert.deepEqual(groupRequestMembers({...db,leaveRequestMembers:[{id:'a',name:'Amit'}]},{role:'Admin'}).map(m=>m.id),['a','l','z']);
+ assert.deepEqual(groupRequestMembers(db,{role:'Employee'}),[]);
 });
