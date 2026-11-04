@@ -37,7 +37,7 @@ test('leave settings validate roles, holidays, working days and eligible approve
 test('designated team leader receives requests and can decide them; unrelated reviewers cannot',()=>{
  const b=backend('e@company.test');b.properties.LEAVE_POLICY=JSON.stringify(policy);const result=created(b);assert.equal(result.ok,true,result.error);const leave=result.data.db.leaves.at(-1);assert.equal(leave.totalDays,'4');assert.equal(leave.approverId,'l');
  const leader=b.call('login',{email:'l@company.test',password},'').data.token;const hr=b.call('login',{email:'h@company.test',password},'').data.token;
- assert.ok(b.call('bootstrap',{},leader).data.db.leaves.some(l=>l.id===leave.id));assert.equal(b.call('leaveDecision',{id:leave.id,status:'Approved'},hr).ok,false);assert.equal(b.call('leaveDecision',{id:leave.id,status:'Approved'},leader).ok,true);assert.equal(b.call('leaveDecision',{id:leave.id,status:'Rejected',rejectionReason:'Late'},leader).ok,false);
+ assert.ok(b.call('bootstrap',{},leader).data.db.leaves.some(l=>l.id===leave.id));assert.equal(b.call('leaveDecision',{id:leave.id,status:'Approved'},leader).ok,true);assert.equal(b.call('leaveDecision',{id:leave.id,status:'Rejected',rejectionReason:'Late'},leader).ok,false);
 });
 test('rejection requires a valid reason, persists it, and locks employee edits',()=>{
  const b=backend('e@company.test'),result=created(b),id=result.data.db.leaves.at(-1).id,hr=b.call('login',{email:'h@company.test',password},'').data.token;
@@ -126,3 +126,5 @@ test('group employee names use the full active directory when the group list is 
  assert.deepEqual(groupRequestMembers({...db,leaveRequestMembers:[{id:'a',name:'Amit'}]},{role:'Admin'}).map(m=>m.id),['a','l','z']);
  assert.deepEqual(groupRequestMembers(db,{role:'Employee'}),[]);
 });
+
+test('Admin and HR can review leave and WFH assigned to another approver',()=>{for(const email of ['admin@company.test','h@company.test'])for(const type of ['Casual','Work from home (WFH)']){const b=backend(email);const row=b.sheets.leaves[1],headers=b.sheets.leaves[0];row[headers.indexOf('approverId')]='l';row[headers.indexOf('type')]=type;const r=b.call('leaveDecision',{id:'lv',status:'Approved'});assert.equal(r.ok,true,r.error);assert.equal(r.data.db.leaves.find(l=>l.id==='lv').status,'Approved');}});
