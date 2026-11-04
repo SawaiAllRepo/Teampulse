@@ -13,3 +13,6 @@ backups/
 
 # Temporary verification artifacts
 outputs/
+
+.tmp/
+*.log
