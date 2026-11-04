@@ -25,7 +25,7 @@ Local or Vercel hosting: Browser > React > /api/teampulse > server proxy > Apps 
 Protected backend actions validate the session, account status, permissions and submitted fields before performing the operation. The result is returned to the frontend to update the interface. Hiding a button is not the permission boundary.
 
 ## Verification status
-The last cleanup verification completed with 332 passing automated tests and a successful production build. Tests use mocked Google services and screen rendering. The latest live deployment version and real Google Sheet writes have not been confirmed from this environment.
+The 4 November 2026 verification completed with 363 passing automated tests and a successful production build, including Daily Work Report permission, history, summary and Excel round-trip checks. Desktop light-mode and mobile dark-mode report screens were inspected with isolated test data. Tests use mocked Google services and screen rendering. The latest live deployment version and real Google Sheet writes have not been confirmed from this environment.
 [[PAGE]]
 # Application Modules and Roles
 
@@ -168,3 +168,31 @@ A successful local build does not update the live app. Errors such as Only your 
 
 ## Implementation references
 README.md; docs/apps-script-deployment.md; docs/vercel-deployment.md; package.json; src/App.jsx; src/pages/Attendance.jsx; src/pages/Settings.jsx; src/data/client.js; apps-script/Code.gs; apps-script/Auth.gs; apps-script/appsscript.json; scripts/create-deployment.mjs; scripts/package-gas.mjs; tests/.
+
+
+## Daily Work Report (4 November 2026)
+
+The sidebar includes Daily Work Report for all signed-in roles. Employees can add multiple task/project updates per day. The server assigns the authenticated employee and today's IST date; editing preserves that identity and date.
+
+Each entry stores project, today's work, done today, output URLs, issues, pending work, status and EOD remarks. Status options are Not Started, In Progress, Completed and Blocked; Blocked requires an issue description. Output supports up to five http/https links for shared files, screenshots, GitHub commits and deployed sites. Files are linked rather than uploaded into TeamPulse.
+
+Today and Monthly report views use the same entries. Filter by employee and month. Summary cards count distinct projects, completed entries, pending entries and unresolved-blocker entries. Counts represent entries, not deduplicated task IDs. A blocker remains unresolved until its entry is updated out of Blocked and its issue is cleared, or the entry is marked Completed. No separate monthly submission is needed.
+
+Employees see their own reports. Reporting managers also see direct reports. Team Leaders see employees assigned tasks in owned projects or standalone managed tasks. Admin and HR see all non-deleted employees. Server checks enforce scope for snapshots, comments and history. Only the owner edits an entry; authorized reviewers comment on other employees' entries. Owners and reviewers can see those comments.
+
+Every submission/edit appends a full version snapshot with actor and timestamp. Revision checks reject stale edits. In-app and notification-inbox reminders flag missing updates. The module shows today's missing team members and prior missing working days in the selected month. Non-working days, holidays, dates before joining/account creation and approved full-day leave are excluded; WFH still requires reporting. Reminders are in-app, not scheduled email.
+
+Excel exports include Summary, Daily entries and Comments worksheets for the selected authorized rows. PDF / Print opens a print-ready report; choose Print / Save as PDF and the browser's PDF destination. Submitted report content is rendered as text rather than injected HTML.
+
+Storage uses separate dailyReports, reportHistory and reportComments Sheet tabs, created lazily on first write or by owner setup. Existing worklogs are preserved and not automatically imported because they lack the new fields. APIs: reportSnapshot, saveDailyReport, commentDailyReport and dailyReportHistory. Visibility and missing-day counts follow current membership and leave policy.
+
+Deploy both regenerated deployment/Code.gs and deployment/Index.html as a new version of the existing Apps Script deployment, then refresh the app.
+
+
+### Automatic monthly work Sheets
+
+Daily report submissions, edits and manager comments also rebuild the readable `DWR_YYYY-MM` tab in the same configured spreadsheet. Each employee has a green section heading and daily rows with Date, Output / Link, Issues Faced, Pending Work, Status, EOD Remarks, Project, Today's Work, Done Today, Manager Comments, Last Updated (IST) and Report ID. Multiple entries on one day remain separate rows. The view contains all employees with submitted entries for that month; app filters do not limit the backend Sheet.
+
+The generated tab uses wrapped text, frozen month headers/date column and status colors. Edit reports in TeamPulse, not in this generated view: it is rebuilt from `dailyReports` and `reportComments`. Admin/HR can use **Sync monthly Sheet** for the selected month to backfill existing saved entries or retry a failed sync. Employee names update on the next sync. Historical records for removed employees remain under Former employee.
+
+A tab is overwritten only if its A1 marker exactly matches the generated month title. An unrelated existing tab with the same name is left intact and a warning is returned. Sheet-sync failures do not discard a saved report/comment; the UI warns, and an audit event records the failure. Raw records and version history remain unchanged by presentation rebuilds. Spreadsheet sharing is still controlled by the owner; app roles do not grant direct access to Google Sheets.

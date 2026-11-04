@@ -19,5 +19,6 @@ export function workspaceNotifications(previous,current,user){
  }
  if(previous)for(const leave of previous.leaves||[]){if(!(current.leaves||[]).some(row=>row.id===leave.id)&&(admin||leave.employeeId===user.id||leave.approverId===user.id))events.push({id:JSON.stringify(['leaves',leave.id,'deleted']),message:`${name(leave.employeeId)} deleted a leave request (${leave.start} to ${leave.end})`,page:'Leave requests'});}
  if(previous)for(const collection of ['tasks','projects','attendance','announcements'])for(const row of previous[collection]||[]){if(!(current[collection]||[]).some(currentRow=>currentRow.id===row.id))events.push({id:JSON.stringify([collection,row.id,'removed']),message:(row.title||row.name||modules[collection]+' record')+' is no longer in your workspace',page:modules[collection]});}
+ if(current.workReportReminder?.missing)events.push({id:JSON.stringify(['workReportReminder',user.id,current.workReportReminder.day]),message:'Your daily work report is pending ('+current.workReportReminder.day+'). Add your progress before wrapping up.',page:'Daily Work Report'});
  return events;
 }

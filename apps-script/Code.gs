@@ -85,7 +85,7 @@ function api(req){requestBook_=null;const lock=LockService.getScriptLock();try{r
  if(req.action==='checkAccount'){limitAuth_('checkAccount');const email=email_(p.email);return {ok:true,data:{exists:rows_('credentials').some(c=>c.email===email)}};}
  if(['register','login'].includes(req.action))return {ok:true,data:authentication_(req.action,p)};
  const u=currentUser_(req.token);
- if(['reportSnapshot','saveDailyReport','commentDailyReport','dailyReportHistory'].includes(req.action))return {ok:true,data:dailyReportsAction_(u,req.action,p)};
+ if(['reportSnapshot','saveDailyReport','commentDailyReport','dailyReportHistory','rebuildReportSheet'].includes(req.action))return {ok:true,data:dailyReportsAction_(u,req.action,p)};
  if(req.action==='logout'){rows_('sessions').filter(x=>x.tokenHash===digest_(req.token)).forEach(x=>{x.revoked=new Date().toISOString();update_('sessions',x);});audit_(u.id,'logout',u.id);return {ok:true,data:{}};}
  if(req.action==='setInitialPassword'){setInitialPassword_(u,p);return {ok:true,data:{}};}
  if(['messageSnapshot','sendMessage'].includes(req.action))return {ok:true,data:messagesAction_(u,req.action,p)};
@@ -206,7 +206,7 @@ function assignDepartments_(u,p){
   require_(options.includes(assignment.department),'Choose a department from the dropdown.');
   const key=assignment.collection+':'+assignment.id;require_(!seen.has(key),'A record can only be assigned once per batch.');seen.add(key);
   const row=tables[assignment.collection].find(record=>record.id===assignment.id);require_(row,'Department record not found. Refresh and try again.');
-  if(assignment.collection==='employees')require_(u.role==='Admin'&&row.status!=='Deleted'&&(u.role==='Admin'||row.id===u.id||!['Admin','HR'].includes(row.role)),'You cannot assign this employee’s department.');
+  if(assignment.collection==='employees')require_(['Admin','HR'].includes(u.role)&&row.status!=='Deleted'&&(u.role==='Admin'||row.id===u.id||!['Admin','HR'].includes(row.role)),'You cannot assign this employee’s department.');
   require_(String(row.department||'')===assignment.previousDepartment,'A department changed since it was reviewed. Refresh and compare the latest values.');
   return {collection:assignment.collection,row,department:assignment.department};
  }).filter(change=>change.row.department!==change.department);
@@ -410,11 +410,12 @@ function reportSnapshot_(u,p){
 }
 function dailyReportsAction_(u,action,p){
  if(action==='reportSnapshot')return reportSnapshot_(u,p);
+ if(action==='rebuildReportSheet'){require_(['Admin','HR'].includes(u.role),'Only Admin and HR can rebuild monthly Sheets.');const snapshot=reportSnapshot_(u,p);return {...snapshot,sheetSync:syncMonthlyReportSheet_(snapshot.month,u.id)};}
  if(action!=='dailyReportHistory')reportSnapshot_(u,p);
  const reports=reportRows_('dailyReports'),existing=reports.find(r=>r.id===p.id),scope=new Set(reportTeam_(u).map(e=>e.id));
  if(action==='dailyReportHistory'){require_(existing&&scope.has(existing.employeeId),'Report not found or unavailable.');return {history:reportRows_('reportHistory').filter(h=>h.reportId===existing.id).sort((a,b)=>Number(b.revision)-Number(a.revision))};}
  if(action==='commentDailyReport'){
- require_(existing&&scope.has(existing.employeeId)&&existing.employeeId!==u.id,'Only the employee manager, Admin or HR can comment.');require_(typeof p.body==='string'&&p.body.trim().length>0&&p.body.length<=2000,'Enter a comment between 1 and 2000 characters.');ensureReportSheet_('reportComments');append_('reportComments',{id:Utilities.getUuid(),reportId:existing.id,actor:u.id,body:p.body.trim(),created:new Date().toISOString()});audit_(u.id,'commentDailyReport',existing.id);return reportSnapshot_(u,p);
+ require_(existing&&scope.has(existing.employeeId)&&existing.employeeId!==u.id,'Only the employee manager, Admin or HR can comment.');require_(typeof p.body==='string'&&p.body.trim().length>0&&p.body.length<=2000,'Enter a comment between 1 and 2000 characters.');ensureReportSheet_('reportComments');append_('reportComments',{id:Utilities.getUuid(),reportId:existing.id,actor:u.id,body:p.body.trim(),created:new Date().toISOString()});audit_(u.id,'commentDailyReport',existing.id);return {...reportSnapshot_(u,p),sheetSync:syncMonthlyReportSheet_(existing.date.slice(0,7),u.id)};
  }
  require_(action==='saveDailyReport','Unknown report action.');require_(!p.id||existing,'Report not found.');require_(!existing||existing.employeeId===u.id,'You can only edit your own reports.');require_(!existing||Number(p.revision)===Number(existing.revision),'This report changed. Refresh before editing again.');
  const input=p.record;const fields=['projectId','todayWork','doneToday','outputLinks','issues','pendingWork','status','remarks'];require_(input&&typeof input==='object'&&!Array.isArray(input)&&Object.keys(input).every(k=>fields.includes(k)),'Only report details can be edited.');const record={};
@@ -423,5 +424,34 @@ function dailyReportsAction_(u,action,p){
  const project=rows_('projects').find(project=>project.id===record.projectId);require_(project&&((existing&&record.projectId===existing.projectId)||reportProjects_(u).some(p=>p.id===record.projectId)),'Choose a project assigned to you.');
  const links=record.outputLinks?record.outputLinks.split(/\r?\n/).map(s=>s.trim()).filter(Boolean):[];require_(links.length<=5&&links.every(link=>link.length<=2000&&/^https?:\/\/[^\s<>"\x27\\]+$/i.test(link)),'Add up to 5 valid http or https output links, one per line.');record.outputLinks=links.join('\n');
  const now=new Date().toISOString(),date=existing?existing.date:Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd');const saved={...record,id:existing?existing.id:Utilities.getUuid(),employeeId:u.id,date,projectName:project.name,created:existing?existing.created:now,updated:now,revision:String(existing?Number(existing.revision)+1:1)};
- ensureReportSheet_('dailyReports');ensureReportSheet_('reportHistory');if(existing)update_('dailyReports',saved);else append_('dailyReports',saved);append_('reportHistory',{id:Utilities.getUuid(),reportId:saved.id,revision:saved.revision,actor:u.id,snapshot:JSON.stringify(saved),created:now});audit_(u.id,existing?'editDailyReport':'submitDailyReport',saved.id);return reportSnapshot_(u,p);
+ ensureReportSheet_('dailyReports');ensureReportSheet_('reportHistory');if(existing)update_('dailyReports',saved);else append_('dailyReports',saved);append_('reportHistory',{id:Utilities.getUuid(),reportId:saved.id,revision:saved.revision,actor:u.id,snapshot:JSON.stringify(saved),created:now});audit_(u.id,existing?'editDailyReport':'submitDailyReport',saved.id);return {...reportSnapshot_(u,p),sheetSync:syncMonthlyReportSheet_(saved.date.slice(0,7),u.id)};
+}
+
+// Readable monthly presentation. dailyReports remains the source of truth.
+function monthlyReportGrid_(month,records,people,comments){
+ const names=new Map(people.map(e=>[e.id,e.name])),groups=new Map(),header=['DATE','Output / Link','Issues Faced','Pending Work','Status','EOD Remarks','Project',"Today's Work",'Done Today','Manager Comments','Last Updated (IST)','Report ID'];
+ for(const report of records.filter(r=>r.date.startsWith(month))){if(!groups.has(report.employeeId))groups.set(report.employeeId,[]);groups.get(report.employeeId).push(report);}
+ const months=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'],title='TeamPulse Daily Work Report | '+month;
+ const grid=[[title,...Array(11).fill('')],[months[Number(month.slice(5))-1]+' '+month.slice(0,4)+' | All employees | Generated view - edit entries in TeamPulse',...Array(11).fill('')]],sections=[];
+ for(const [employeeId,entries] of [...groups].sort((a,b)=>(names.get(a[0])||a[0]).localeCompare(names.get(b[0])||b[0]))){
+  const start=grid.length+1;grid.push([(names.get(employeeId)||'Former employee')+' | Employee ID: '+(people.find(e=>e.id===employeeId)?.employeeCode||employeeId),...Array(11).fill('')]);grid.push(header.slice());
+  for(const r of entries.sort((a,b)=>a.date.localeCompare(b.date)||a.created.localeCompare(b.created))){const date=r.date.split('-').reverse().join('/');const notes=comments.filter(c=>c.reportId===r.id).map(c=>(names.get(c.actor)||'Former reviewer')+': '+c.body).join('\n');grid.push([date,r.outputLinks,r.issues,r.pendingWork,r.status,r.remarks,r.projectName,r.todayWork,r.doneToday,notes,Utilities.formatDate(new Date(r.updated),'Asia/Kolkata','dd/MM/yyyy HH:mm'),r.id]);}
+  sections.push({start,header:start+1,first:start+2,count:entries.length});grid.push(Array(12).fill(''));
+ }
+ if(!groups.size)grid.push(['No daily work entries for this month.',...Array(11).fill('')]);
+ return {title,grid,sections};
+}
+function syncMonthlyReportSheet_(month,actor){
+ const name='DWR_'+month;try{
+ require_(typeof month==='string'&&/^\d{4}-(0[1-9]|1[0-2])$/.test(month),'Invalid report month.');const book=spreadsheet_(),layout=monthlyReportGrid_(month,reportRows_('dailyReports'),rows_('employees'),reportRows_('reportComments'));let sheet=book.getSheetByName(name);
+ if(sheet)require_(sheet.getRange(1,1,1,1).getValues()[0][0]===layout.title,'An unrelated tab already uses '+name+'. Rename that tab, then sync again.');else sheet=book.insertSheet(name);
+ const rowCount=Math.max(layout.grid.length,sheet.getLastRow(),2);if(layout.grid.length>sheet.getMaxRows())sheet.insertRowsAfter(sheet.getMaxRows(),layout.grid.length-sheet.getMaxRows());if(sheet.getMaxColumns()<12)sheet.insertColumnsAfter(sheet.getMaxColumns(),12-sheet.getMaxColumns());
+ const area=sheet.getRange(1,1,rowCount,12);area.breakApart();area.clearContent();area.clearFormat();sheet.getRange(1,1,layout.grid.length,12).setValues(layout.grid.map(row=>row.map(value=>cell_(String(value??'')))));
+ const body=sheet.getRange(1,1,layout.grid.length,12);body.setFontFamily('Arial').setFontSize(10).setFontColor('#172440').setVerticalAlignment('top').setWrap(true).setBackground('#ffffff');
+ sheet.getRange(1,1,1,12).merge().setBackground('#548c3b').setFontColor('#ffffff').setFontSize(16).setFontWeight('bold');sheet.setRowHeight(1,34);sheet.getRange(2,1,1,12).merge().setBackground('#edf4e8').setFontColor('#47613b').setFontSize(10);sheet.setRowHeight(2,30);
+ for(const group of layout.sections){sheet.getRange(group.start,1,1,12).merge().setBackground('#b9d8a7').setFontWeight('bold');sheet.setRowHeight(group.start,28);sheet.getRange(group.header,1,1,12).setBackground('#dcebd5').setFontWeight('bold').setBorder(true,true,true,true,true,true,'#9fb494',SpreadsheetApp.BorderStyle.SOLID);sheet.setRowHeight(group.header,30);
+ const data=sheet.getRange(group.first,1,group.count,12);data.setBorder(true,true,true,true,true,true,'#d7dfd3',SpreadsheetApp.BorderStyle.SOLID);sheet.getRange(group.first,1,group.count,1).setBackground('#eef5e9').setFontWeight('bold');for(let index=0;index<group.count;index++){const status=layout.grid[group.first-1+index][4];sheet.getRange(group.first+index,5,1,1).setBackground(status==='Completed'?'#e3f2df':status==='Blocked'?'#fce3e7':'#fff2d5');}sheet.setRowHeights(group.first,group.count,64);}
+ sheet.setFrozenRows(2);sheet.setFrozenColumns(1);sheet.setHiddenGridlines(true);[110,260,220,220,125,220,180,280,240,260,150,260].forEach((width,index)=>sheet.setColumnWidth(index+1,width));
+ return {ok:true,name};
+ }catch(error){console.error('Monthly work Sheet sync failed: '+error.message);try{audit_(actor,'dailyReportSheetSyncFailed',name);}catch{}return {ok:false,name,error:error.message||'Monthly Sheet could not be updated.'};}
 }

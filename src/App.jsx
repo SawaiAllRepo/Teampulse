@@ -1,3 +1,4 @@
+import DailyWorkReport from './pages/DailyWorkReport.jsx';
 import LeaveEditor from './components/LeaveEditor.jsx';
 import {usePreferences} from './components/PreferencesProvider.jsx';
 import PreferencesControls from './components/PreferencesControls.jsx';
@@ -20,12 +21,12 @@ import useAttendanceRefresh from './hooks/useAttendanceRefresh.js';
 import {attendanceForDay,indiaDate,mergeAttendance} from './utils/attendance.js';
 import React,{useState,useEffect,useRef} from 'react';
 
-import{LayoutDashboard,Users,FolderKanban,CheckSquare,Clock,CalendarDays,Megaphone,Settings,Search,Plus,ArrowUpRight,ChevronRight,LogOut,Menu,Activity,Check,X}from'lucide-react';
+import{LayoutDashboard,ClipboardList,Users,FolderKanban,CheckSquare,Clock,CalendarDays,Megaphone,Settings,Search,Plus,ArrowUpRight,ChevronRight,LogOut,Menu,Activity,Check,X}from'lucide-react';
 import{emptyData,today,hasSession,setSession,request}from'./data/client.js';
 import sawaiLogo from './assets/sawai-logo.png?inline';
 import {captureLocation,locationMessage} from './utils/location.js';
 import Login from './pages/Login.jsx';
-const sections=[['Overview',LayoutDashboard],['Employees',Users],['Projects',FolderKanban],['Tasks',CheckSquare],['Attendance',Clock],['Leave requests',CalendarDays],['Announcements',Megaphone],['Settings',Settings]];
+const sections=[['Overview',LayoutDashboard],['Employees',Users],['Projects',FolderKanban],['Tasks',CheckSquare],['Attendance',Clock],['Daily Work Report',ClipboardList],['Leave requests',CalendarDays],['Announcements',Megaphone],['Settings',Settings]];
 export default function App(){
  const {t:translate,language}=usePreferences();
  const[db,setDb]=useState(emptyData),[user,setUser]=useState(null),[page,setPage]=useState('Overview'),[search,setSearch]=useState(''),[modal,setModal]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[mobile,setMobile]=useState(false),[notice,setNotice]=useState(''),[loading,setLoading]=useState(hasSession);
@@ -66,5 +67,6 @@ return <div className="app"><aside className={mobile?'sidebar show':'sidebar'}><
 {page==='Attendance'&&<Attendance onEdit={openEditor} db={db} employees={db.employees} syncAttendance={syncAttendance} me={me} role={role} attendance={attendance} currentAttendance={currentAttendance} employee={employee} mutate={mutate} busy={busy} location={location} punchStage={punchStage} syncedAt={syncedAt} accessEvents={accessEvents} attendanceDate={attendanceDate} setAttendanceDate={setAttendanceDate}/>}
 {page==='Leave requests'&&<LeaveRequests db={db} error={error} me={me} admin={admin} leaves={leaves} employee={employee} badge={badge} mutate={mutate} busy={busy}/>}
 {page==='Announcements'&&<Announcements onEdit={openEditor} me={me} admin={admin} db={db} mutate={mutate} busy={busy}/>}
+{page==='Daily Work Report'&&<DailyWorkReport key={me.id} me={me}/>}
 {page==='Settings'&&<SettingsPage admin={admin} db={db} me={me} role={role} initials={initials} mutate={mutate} busy={busy} changePassword={changePassword} load={load} setBusy={setBusy} setNotice={setNotice} fail={fail}/>}
 <footer><span>© {new Date().getFullYear()} Sawai Associates · TeamPulse</span><span>{translate("Built for people. Designed for progress.")}</span></footer></main></div>{editing&&<RecordEditor key={editing.collection+String(editing.record?.id)} {...editing} db={db} user={user} busy={busy} error={error} mutate={mutate} onClose={()=>setEditing(null)}/>} {modal==='leaves'&&<LeaveEditor user={user} db={db} busy={busy} error={error} mutate={mutate} onClose={()=>setModal(null)}/>} {modal&&modal!=='leaves'&&<div className="modalback" onClick={e=>{if(e.target===e.currentTarget&&!busy)setModal(null)}}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="panelhead"><h3 id="dialog-title">{translate(modal==='leaves'?'Request leave':'Add '+modal.replace(/s$/,''))}</h3><button aria-label={translate("Close dialog")} disabled={busy} onClick={()=>setModal(null)}><X size={18}/></button></div><form onSubmit={createForm}>{error&&<p className="error" role="alert">{translate(error)}</p>}{modal==='employees'&&<>{field('Full name','name')}{field('Work email','email','email')}{field('Designation','designation')}{field('Department','department','',departments.map(department=>[department,department]))}{field('Role','role','', (role==='Admin'?['Employee','Team Leader','HR','Admin']:['Employee','Team Leader']).map(x=>[x,x]))}</>}{modal==='projects'&&<>{field('Project name','name')}{field('Description','description')}{field('Department','department','',departments.map(department=>[department,department]))}{field('Owner','owner','',db.employees.filter(e=>e.status==='Active'&&['Admin','Team Leader'].includes(e.role)&&(admin||e.id===me.id)).map(e=>[e.id,e.name]))}{field('Due date','due','date')}{field('Status','status','',['Planning','In progress','Completed'].map(x=>[x,x]))}</>}{modal==='announcements'&&<>{field('Title','title')}{field('Message','message')}</>}<button className="primary" disabled={busy||!me}>{translate(busy?'Saving…':'Save '+(modal==='leaves'?'request':'record'))}</button></form></section></div>}</div>}
