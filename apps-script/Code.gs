@@ -446,12 +446,14 @@ function syncMonthlyReportSheet_(month,actor){
  require_(typeof month==='string'&&/^\d{4}-(0[1-9]|1[0-2])$/.test(month),'Invalid report month.');const book=spreadsheet_(),layout=monthlyReportGrid_(month,reportRows_('dailyReports'),rows_('employees'),reportRows_('reportComments'));let sheet=book.getSheetByName(name);
  if(sheet)require_(sheet.getRange(1,1,1,1).getValues()[0][0]===layout.title,'An unrelated tab already uses '+name+'. Rename that tab, then sync again.');else sheet=book.insertSheet(name);
  const rowCount=Math.max(layout.grid.length,sheet.getLastRow(),2);if(layout.grid.length>sheet.getMaxRows())sheet.insertRowsAfter(sheet.getMaxRows(),layout.grid.length-sheet.getMaxRows());if(sheet.getMaxColumns()<12)sheet.insertColumnsAfter(sheet.getMaxColumns(),12-sheet.getMaxColumns());
+ // Full-width merged headings cannot cross a frozen-column boundary.
+ sheet.setFrozenColumns(0);
  const area=sheet.getRange(1,1,rowCount,12);area.breakApart();area.clearContent();area.clearFormat();sheet.getRange(1,1,layout.grid.length,12).setValues(layout.grid.map(row=>row.map(value=>cell_(String(value??'')))));
  const body=sheet.getRange(1,1,layout.grid.length,12);body.setFontFamily('Arial').setFontSize(10).setFontColor('#172440').setVerticalAlignment('top').setWrap(true).setBackground('#ffffff');
  sheet.getRange(1,1,1,12).merge().setBackground('#548c3b').setFontColor('#ffffff').setFontSize(16).setFontWeight('bold');sheet.setRowHeight(1,34);sheet.getRange(2,1,1,12).merge().setBackground('#edf4e8').setFontColor('#47613b').setFontSize(10);sheet.setRowHeight(2,30);
  for(const group of layout.sections){sheet.getRange(group.start,1,1,12).merge().setBackground('#b9d8a7').setFontWeight('bold');sheet.setRowHeight(group.start,28);sheet.getRange(group.header,1,1,12).setBackground('#dcebd5').setFontWeight('bold').setBorder(true,true,true,true,true,true,'#9fb494',SpreadsheetApp.BorderStyle.SOLID);sheet.setRowHeight(group.header,30);
  const data=sheet.getRange(group.first,1,group.count,12);data.setBorder(true,true,true,true,true,true,'#d7dfd3',SpreadsheetApp.BorderStyle.SOLID);sheet.getRange(group.first,1,group.count,1).setBackground('#eef5e9').setFontWeight('bold');for(let index=0;index<group.count;index++){const status=layout.grid[group.first-1+index][4];sheet.getRange(group.first+index,5,1,1).setBackground(status==='Completed'?'#e3f2df':status==='Blocked'?'#fce3e7':'#fff2d5');}sheet.setRowHeights(group.first,group.count,64);}
- sheet.setFrozenRows(2);sheet.setFrozenColumns(1);sheet.setHiddenGridlines(true);[110,260,220,220,125,220,180,280,240,260,150,260].forEach((width,index)=>sheet.setColumnWidth(index+1,width));
+ sheet.setFrozenRows(2);sheet.setHiddenGridlines(true);[110,260,220,220,125,220,180,280,240,260,150,260].forEach((width,index)=>sheet.setColumnWidth(index+1,width));
  return {ok:true,name};
  }catch(error){console.error('Monthly work Sheet sync failed: '+error.message);try{audit_(actor,'dailyReportSheetSyncFailed',name);}catch{}return {ok:false,name,error:error.message||'Monthly Sheet could not be updated.'};}
 }
