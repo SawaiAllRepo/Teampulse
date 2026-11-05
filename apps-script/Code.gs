@@ -348,8 +348,6 @@ function messagesAction_(u,action,p){
   require_(typeof p.recipientId==='string'&&p.recipientId!==u.id,'Choose another teammate.');
   const recipient=people.find(person=>person.id===p.recipientId&&person.status==='Active');
   require_(recipient,'This teammate is unavailable.');
-  const allowed=directoryPeople_(people,u).some(person=>person.id===recipient.id)||directoryPeople_(people,recipient).some(person=>person.id===u.id);
-  require_(allowed,'You can only message teammates in your directory.');
   require_(typeof p.body==='string'&&p.body.trim().length>0&&p.body.trim().length<=2000,'Enter a message between 1 and 2000 characters.');
   if(!sheet){sheet=spreadsheet_().insertSheet('messages');sheet.appendRow(SCHEMA.messages);sheet.setFrozenRows(1);}
   append_('messages',{id:Utilities.getUuid(),senderId:u.id,recipientId:recipient.id,body:p.body.trim(),created:new Date().toISOString(),readAt:''});
@@ -357,7 +355,7 @@ function messagesAction_(u,action,p){
  const messages=(sheet?rows_('messages'):[]).filter(message=>message.senderId===u.id||message.recipientId===u.id);
  if(typeof p.peerId==='string')for(const message of messages){if(message.senderId===p.peerId&&message.recipientId===u.id&&!message.readAt){message.readAt=new Date().toISOString();update_('messages',message);}}
  const ids=new Set(messages.flatMap(message=>[message.senderId,message.recipientId]));
- return {messages,people:people.filter(person=>ids.has(person.id)).map(person=>({id:person.id,name:person.name,photo:person.photo||'',status:person.status}))};
+ return {directoryVersion:1,messages,people:people.filter(person=>person.status==='Active'||ids.has(person.id)).map(person=>({id:person.id,name:person.name,photo:person.photo||'',status:person.status,role:person.role,department:person.department||''}))};
 }
 
 // Group requests are available to Team Leaders and Admins for every active member.
@@ -418,12 +416,17 @@ function dailyReportsAction_(u,action,p){
  require_(existing&&scope.has(existing.employeeId)&&existing.employeeId!==u.id,'Only the employee manager, Admin or HR can comment.');require_(typeof p.body==='string'&&p.body.trim().length>0&&p.body.length<=2000,'Enter a comment between 1 and 2000 characters.');ensureReportSheet_('reportComments');append_('reportComments',{id:Utilities.getUuid(),reportId:existing.id,actor:u.id,body:p.body.trim(),created:new Date().toISOString()});audit_(u.id,'commentDailyReport',existing.id);return {...reportSnapshot_(u,p),sheetSync:syncMonthlyReportSheet_(existing.date.slice(0,7),u.id)};
  }
  require_(action==='saveDailyReport','Unknown report action.');require_(!p.id||existing,'Report not found.');require_(!existing||existing.employeeId===u.id,'You can only edit your own reports.');require_(!existing||Number(p.revision)===Number(existing.revision),'This report changed. Refresh before editing again.');
- const input=p.record;const fields=['projectId','todayWork','doneToday','outputLinks','issues','pendingWork','status','remarks'];require_(input&&typeof input==='object'&&!Array.isArray(input)&&Object.keys(input).every(k=>fields.includes(k)),'Only report details can be edited.');const record={};
+ const input=p.record;const fields=['projectId','todayWork','doneToday','outputLinks','issues','pendingWork','status','remarks'];require_(input&&typeof input==='object'&&!Array.isArray(input)&&Object.keys(input).every(k=>k==='date'||fields.includes(k)),'Only report details can be edited.');const record={};
  for(const key of fields){const value=input[key]??'';require_(typeof value==='string'&&value.length<=(key==='outputLinks'?6000:4000),'Invalid '+key+'.');record[key]=value.trim();}
  require_(record.todayWork&&record.doneToday,'Daily work and progress are required.');require_(['Not Started','In Progress','Completed','Blocked'].includes(record.status),'Choose a valid status.');require_(record.status!=='Blocked'||record.issues,'Describe the blocker.');
  const project=rows_('projects').find(project=>project.id===record.projectId);require_(project&&((existing&&record.projectId===existing.projectId)||reportProjects_(u).some(p=>p.id===record.projectId)),'Choose a project assigned to you.');
  const links=record.outputLinks?record.outputLinks.split(/\r?\n/).map(s=>s.trim()).filter(Boolean):[];require_(links.length<=5&&links.every(link=>link.length<=2000&&/^https?:\/\/[^\s<>"\x27\\]+$/i.test(link)),'Add up to 5 valid http or https output links, one per line.');record.outputLinks=links.join('\n');
- const now=new Date().toISOString(),date=existing?existing.date:Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd');const saved={...record,id:existing?existing.id:Utilities.getUuid(),employeeId:u.id,date,projectName:project.name,created:existing?existing.created:now,updated:now,revision:String(existing?Number(existing.revision)+1:1)};
+ const day=Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd');
+ const date=input.date===undefined?(existing?existing.date:day):input.date;
+ require_(typeof date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&!isNaN(Date.parse(date))&&new Date(date).toISOString().slice(0,10)===date,'Choose a valid report date.');
+ require_(date<=day,'Report date cannot be in the future.');
+ require_(!existing||date===existing.date,'The date of an existing report cannot be changed.');
+ const now=new Date().toISOString();const saved={...record,id:existing?existing.id:Utilities.getUuid(),employeeId:u.id,date,projectName:project.name,created:existing?existing.created:now,updated:now,revision:String(existing?Number(existing.revision)+1:1)};
  ensureReportSheet_('dailyReports');ensureReportSheet_('reportHistory');if(existing)update_('dailyReports',saved);else append_('dailyReports',saved);append_('reportHistory',{id:Utilities.getUuid(),reportId:saved.id,revision:saved.revision,actor:u.id,snapshot:JSON.stringify(saved),created:now});audit_(u.id,existing?'editDailyReport':'submitDailyReport',saved.id);return {...reportSnapshot_(u,p),sheetSync:syncMonthlyReportSheet_(saved.date.slice(0,7),u.id)};
 }
 

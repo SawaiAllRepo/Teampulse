@@ -38,9 +38,11 @@ Deploy both updated Code.gs and Index.html from the deployment folder using a ne
 
 ## Teammate messaging
 
-Open Teammates (Employees for Admin/HR), then click Message on an active teammate card. Type your message and select Send message. The Messages panel lists conversations and unread counts. It refreshes every 10 seconds while this page is visible; open a conversation to read replies. Messages support up to 2,000 characters. Only the sender and recipient can retrieve a conversation through the app, including for Admin/HR users. Spreadsheet owners retain direct access to the underlying sheet.
+Open Messages in the sidebar, then search and select any active employee, Admin, Team Leader or HR member. Type your message and select Send message. The Messages panel lists all active members and unread counts, across departments. It refreshes every 10 seconds while this page is visible; open a conversation to read replies. Messages support up to 2,000 characters. Only the sender and recipient can retrieve a conversation through the app, including for Admin/HR users. Spreadsheet owners retain direct access to the underlying sheet.
 
 The messages sheet is created automatically on the first send, or by setup(). Deploy the updated Code.gs and Index.html as a new Apps Script version. Existing spreadsheet records are preserved.
+
+If only existing chat contacts appear, the live backend is still serving an older version. Replace Code.gs with deployment/Code.gs, save, then select Deploy > Manage deployments > Edit > Version: New version > Deploy. Update Index.html as well when hosting the frontend in Apps Script. For localhost or Vercel, ensure APPS_SCRIPT_URL points to that updated deployment. Clear the member search after reloading.
 
 ## Team leader group requests
 

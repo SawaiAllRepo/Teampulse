@@ -15,3 +15,20 @@ test('missing-update reminders respect leave, holidays, WFH and joining dates',(
 test('old deployments lazily create report sheets and existing worklogs remain untouched',()=>{const b=backend('e@company.test');delete b.sheets.dailyReports;delete b.sheets.reportHistory;delete b.sheets.reportComments;const logs=JSON.stringify(b.sheets.worklogs);assert.equal(b.call('reportSnapshot').ok,true);assert.equal(save(b).ok,true);assert.equal(b.sheets.dailyReports.length,2);assert.equal(b.sheets.reportHistory.length,2);assert.equal(JSON.stringify(b.sheets.worklogs),logs);});
 test('monthly summary counts projects, completion and unresolved blockers correctly',()=>{const rows=[{projectId:'p',status:'Completed',issues:'old resolved issue'},{projectId:'p',status:'In Progress',issues:''},{projectId:'q',status:'Blocked',issues:'error'}];assert.deepEqual(reportSummary(rows),{entries:3,projects:2,completed:1,pending:2,blockers:1});});
 test('Excel export round trips all report text and comments without formulas',async()=>{const mod=await import('exceljs/dist/exceljs.min.js'),Excel=mod.default||mod;const row={...record,id:'r',employeeId:'e',projectName:'TeamPulse',date:'2026-10-14',updated:'2026-10-14T12:00:00Z',revision:'2',doneToday:'=HYPERLINK("https://example.com")'};const bytes=await reportWorkbook([row],[{reportId:'r',actor:'a',actorName:'Admin',body:'Review complete',created:row.updated}],[{id:'e',name:'Employee'}],'2026-10','Employee');const book=new Excel.Workbook();await book.xlsx.load(bytes);assert.equal(book.getWorksheet('Daily entries').getCell('E2').value,row.doneToday);assert.equal(book.getWorksheet('Comments').getCell('E2').value,'Review complete');assert.equal(book.getWorksheet('Summary').getCell('B4').value,1);});
+
+test('past-date entries save to their month and can be edited with date and history preserved',()=>{
+ const b=backend('e@company.test');
+ for(const date of ['2026-10-01','2026-10-02','2026-09-30']){
+  const result=save(b,{date},{month:date.slice(0,7)});assert.equal(result.ok,true,result.error);
+  const row=result.data.reports.find(r=>r.date===date);assert.ok(row);assert.equal(row.employeeId,'e');
+  const edited=save(b,{date,doneToday:'Late update'},{id:row.id,revision:row.revision,month:date.slice(0,7)});assert.equal(edited.ok,true,edited.error);
+  assert.equal(edited.data.reports.find(r=>r.id===row.id).date,date);
+  assert.equal(b.call('dailyReportHistory',{id:row.id}).data.history.length,2);
+  assert.equal(save(b,{date:'2026-10-03'},{id:row.id,revision:'2'}).ok,false);
+ }
+});
+test('future and invalid work dates cannot create reports',()=>{
+ const b=backend('e@company.test');
+ for(const date of ['2026-10-15','2026-02-30','2026-13-01','bad','',123,null])assert.equal(save(b,{date}).ok,false,String(date));
+ assert.equal(b.sheets.dailyReports.length,1);
+});
