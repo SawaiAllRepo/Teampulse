@@ -51,6 +51,7 @@ npm run build:web generates dist/. npm run build also packages the Apps Script u
 
 - [Apps Script deployment](docs/apps-script-deployment.md)
 - [Vercel deployment](docs/vercel-deployment.md)
+- [Password recovery and notification upgrade](docs/password-recovery.md)
 
 Upload updated Code.gs and Index.html together and deploy a new Apps Script version. Updating local files does not update production.
 

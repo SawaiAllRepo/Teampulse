@@ -4,6 +4,9 @@
  * Set SPREADSHEET_ID and ADMIN_EMAIL in Project Settings > Script Properties. */
 const TEAMPULSE_SPREADSHEET_ID = '1zsY6TWHvstFcN39kAGQziLwJG-jztdGwllS3SU-RxLs';
 const SCHEMA = {
+ passwordResets:['id','employeeId','tokenHash','expires','usedAt','createdAt','credentialHash','emailHash'],
+ notificationEvents:['id','collection','recordId','record','recipients','created','delivered'],
+ notifications:['id','eventId','recipientId','collection','recordId','message','created','readAt','dismissedAt','deliveredAt'],
  dailyReports:['id','employeeId','date','projectId','projectName','todayWork','doneToday','outputLinks','issues','pendingWork','status','remarks','created','updated','revision'],
  reportHistory:['id','reportId','revision','actor','snapshot','created'],
  reportComments:['id','reportId','actor','body','created'],
@@ -22,6 +25,9 @@ const SCHEMA = {
  sessions:['id','employeeId','tokenHash','expires','revoked','created']
 };
 let requestBook_=null;
+let requestRows_=null,notificationActor_=null;
+function invalidateRows_(k){if(requestRows_)delete requestRows_[k];}
+function rows_(k){if(!requestRows_)return rowsUncached_(k);if(!Object.prototype.hasOwnProperty.call(requestRows_,k))requestRows_[k]=rowsUncached_(k);return requestRows_[k].map(row=>({...row}));}
 function spreadsheet_(){if(requestBook_)return requestBook_;const id=PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID')||TEAMPULSE_SPREADSHEET_ID;return requestBook_=SpreadsheetApp.openById(id)}
 function setup(){
  const lock=LockService.getScriptLock();lock.waitLock(15000);
@@ -54,10 +60,10 @@ function setup(){
  }finally{lock.releaseLock();}
 }
 function doGet(){return HtmlService.createHtmlOutputFromFile('Index').setTitle('TeamPulse - Sawai Associates').setFaviconUrl('https://www.sawaiassociates.com/favicon-48.png')}
-function rows_(k){const sheet=spreadsheet_().getSheetByName(k);if(!sheet)throw Error('Run setup() before opening TeamPulse.');if(k==='tasks')return readTasks_(sheet);if(k==='leaves')return readLeaves_(sheet);const data=sheet.getDataRange().getValues();if(k==='attendance'&&JSON.stringify(data[0])===JSON.stringify(SCHEMA.attendance.slice(0,-1))){sheet.getRange(1,SCHEMA.attendance.length,1,1).setValues([['workMode']]);data[0]=SCHEMA.attendance;}if(k==='employees'){const headers=data[0]||[];require_(JSON.stringify(headers.slice(0,8))===JSON.stringify(SCHEMA.employees.slice(0,8)),'Unexpected columns in employees');for(let i=8;i<SCHEMA.employees.length;i++){if(headers[i]===undefined||headers[i]===''){sheet.getRange(1,i+1,1,1).setValues([[SCHEMA.employees[i]]]);headers[i]=SCHEMA.employees[i];}}data[0]=headers;}if(JSON.stringify((data[0]||[]).slice(0,SCHEMA[k].length))!==JSON.stringify(SCHEMA[k]))throw Error('Unexpected columns in '+k);return data.slice(1).filter(r=>r[0]).map(r=>Object.fromEntries(SCHEMA[k].map((h,i)=>[h,sheetValue_(h,r[i])])))}
+function rowsUncached_(k){const sheet=spreadsheet_().getSheetByName(k);if(!sheet)throw Error('Run setup() before opening TeamPulse.');if(k==='tasks')return readTasks_(sheet);if(k==='leaves')return readLeaves_(sheet);const data=sheet.getDataRange().getValues();if(k==='attendance'&&JSON.stringify(data[0])===JSON.stringify(SCHEMA.attendance.slice(0,-1))){sheet.getRange(1,SCHEMA.attendance.length,1,1).setValues([['workMode']]);data[0]=SCHEMA.attendance;}if(k==='employees'){const headers=data[0]||[];require_(JSON.stringify(headers.slice(0,8))===JSON.stringify(SCHEMA.employees.slice(0,8)),'Unexpected columns in employees');for(let i=8;i<SCHEMA.employees.length;i++){if(headers[i]===undefined||headers[i]===''){sheet.getRange(1,i+1,1,1).setValues([[SCHEMA.employees[i]]]);headers[i]=SCHEMA.employees[i];}}data[0]=headers;}if(JSON.stringify((data[0]||[]).slice(0,SCHEMA[k].length))!==JSON.stringify(SCHEMA[k]))throw Error('Unexpected columns in '+k);return data.slice(1).filter(r=>r[0]).map(r=>Object.fromEntries(SCHEMA[k].map((h,i)=>[h,sheetValue_(h,r[i])])))}
 function cell_(v){return typeof v==='string'&&/^[=+\-@]/.test(v)?"'"+v:v}
-function append_(k,r){if(k==='tasks')return writeTaskRow_(r,false);if(k==='leaves')return writeLeaveRow_(r,false);spreadsheet_().getSheetByName(k).appendRow(SCHEMA[k].map(h=>cell_(r[h]??'')))}
-function update_(k,r){if(k==='tasks')return writeTaskRow_(r,true);if(k==='leaves')return writeLeaveRow_(r,true);const s=spreadsheet_().getSheetByName(k);const ids=s.getRange(1,1,s.getLastRow(),1).getValues();const i=ids.findIndex(row=>row[0]===r.id);if(i<1)throw Error('Record not found.');s.getRange(i+1,1,1,SCHEMA[k].length).setValues([SCHEMA[k].map(h=>cell_(r[h]??''))])}
+function appendRaw_(k,r){invalidateRows_(k);if(k==='tasks')return writeTaskRow_(r,false);if(k==='leaves')return writeLeaveRow_(r,false);spreadsheet_().getSheetByName(k).appendRow(SCHEMA[k].map(h=>cell_(r[h]??'')))}
+function updateRaw_(k,r){invalidateRows_(k);if(k==='tasks')return writeTaskRow_(r,true);if(k==='leaves')return writeLeaveRow_(r,true);const s=spreadsheet_().getSheetByName(k);const ids=s.getRange(1,1,s.getLastRow(),1).getValues();const i=ids.findIndex(row=>row[0]===r.id);if(i<1)throw Error('Record not found.');s.getRange(i+1,1,1,SCHEMA[k].length).setValues([SCHEMA[k].map(h=>cell_(r[h]??''))])}
 function require_(condition,message){if(!condition)throw Error(message||'Permission denied.')}
 function currentUser_(token){
  if(typeof token!=='string'||token.length<40||token.length>200)throw authError_();
@@ -79,12 +85,15 @@ function teamPresence_(employees,attendance){
 function teamDepartmentKey_(value){const aliases={"ai ml developer":"ai ml developer","ai ml":"ai ml developer","al ml":"ai ml developer","al ml developer":"ai ml developer","ai ml engineer":"ai ml developer","ai developer":"ai ml developer","ml developer":"ai ml developer","machine learning":"ai ml developer","machine learning engineer":"ai ml developer","artificial intelligence":"ai ml developer","artificial intelligence and machine learning":"ai ml developer","software developer":"software developer","software development":"software developer","software engineer":"software developer","software engineering":"software developer","software":"software developer","hr":"hr","human resources":"hr","human resource":"hr","human resource management":"hr","hr department":"hr","hr executive":"hr","hr manager":"hr","hr recruiter":"hr","recruiter":"hr","web development":"web development","web developer":"web development","frontend developer":"web development","front end developer":"web development","backend developer":"web development","back end developer":"web development","full stack developer":"web development","fullstack developer":"web development","mobile app development":"mobile app development","mobile developer":"mobile app development","mobile app developer":"mobile app development","android developer":"mobile app development","ios developer":"mobile app development","flutter developer":"mobile app development","react native developer":"mobile app development","data science":"data science","data scientist":"data science","data analyst":"data science","data analytics":"data science","data engineer":"data science","quality assurance testing":"quality assurance testing","qa":"quality assurance testing","quality assurance":"quality assurance testing","testing":"quality assurance testing","qa engineer":"quality assurance testing","software tester":"quality assurance testing","test engineer":"quality assurance testing","qa tester":"quality assurance testing","devops cloud":"devops cloud","devops":"devops cloud","cloud":"devops cloud","devops engineer":"devops cloud","cloud engineer":"devops cloud","cloud computing":"devops cloud","ui ux design":"ui ux design","ui ux":"ui ux design","ui ux designer":"ui ux design","ui designer":"ui ux design","ux designer":"ui ux design","ui ux developer":"ui ux design","product designer":"ui ux design","it support":"it support","technical support":"it support","it support engineer":"it support","technical support engineer":"it support","help desk":"it support","sales and marketing":"sales and marketing","sales":"sales and marketing","marketing":"sales and marketing","digital marketing":"sales and marketing","sales executive":"sales and marketing","marketing executive":"sales and marketing","business development":"sales and marketing","finance and accounts":"finance and accounts","finance":"finance and accounts","accounts":"finance and accounts","accounting":"finance and accounts","accountant":"finance and accounts","finance and accounting":"finance and accounts","operations":"operations","operation":"operations","operations executive":"operations","operations manager":"operations","management":"management","manager":"management","administrator":"management","administration":"management","others":"others","other":"others","other department":"others"};const key=String(value||'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim();return aliases[key]||key;}
 function directoryPeople_(employees,u){if(['Admin','HR'].includes(u.role))return employees;const department=teamDepartmentKey_(u.department);return employees.filter(e=>String(e.id)===String(u.id)||department&&teamDepartmentKey_(e.department)===department);}
 function employeeDirectory_(employees){return employees.filter(e=>e.status!=='Deleted').map(e=>({id:e.id,name:e.name,photo:e.photo||'',role:e.role,department:e.department,designation:e.designation,status:e.status}));}
-function state_(u){const db={};Object.keys(SCHEMA).filter(k=>!['audit','credentials','sessions','accessEvents','messages','settings','dailyReports','reportHistory','reportComments'].includes(k)).forEach(k=>db[k]=rows_(k));const directoryPeople=directoryPeople_(db.employees,u);db.employeeDirectory=employeeDirectory_(directoryPeople);db.workReportReminder=workReportReminder_(u);db.leavePolicy=leavePolicy_();db.leaveRequestMembers=['Team Leader','Admin'].includes(u.role)?groupLeaveMembers_(u).map(e=>({id:e.id,name:e.name})):[];db.teamPresence=teamPresence_(directoryPeople,db.attendance);const creators=new Map(rows_('audit').filter(event=>event.action==='create').map(event=>[event.target,event.actor]));db.announcements=db.announcements.map(announcement=>{const creatorId=creators.get(announcement.id);const creator=db.employees.find(employee=>employee.id===creatorId);return {...announcement,createdBy:creatorId||'',createdByName:creator?creator.name:''};});const admin=['Admin','HR'].includes(u.role);db.taskAssignees=admin||u.role==='Team Leader'?db.employees.filter(employee=>employee.status==='Active').map(employee=>({id:employee.id,name:employee.name})):[];if(!admin){if(u.role==='Team Leader'){db.projects=db.projects.filter(p=>p.owner===u.id);db.tasks=db.tasks.filter(t=>db.projects.some(p=>p.id===t.projectId)||!t.projectId&&(t.managerId===u.id||t.assignee===u.id));const people=new Set([u.id,...db.tasks.map(t=>t.assignee)]);db.employees=db.employees.filter(e=>people.has(e.id));db.attendance=db.attendance.filter(a=>people.has(a.employeeId));db.worklogs=db.worklogs.filter(w=>people.has(w.employeeId))}else{db.tasks=db.tasks.filter(t=>t.assignee===u.id);db.projects=db.projects.filter(p=>db.tasks.some(t=>t.projectId===p.id));db.employees=db.employees.filter(e=>e.id===u.id);db.attendance=db.attendance.filter(a=>a.employeeId===u.id);db.worklogs=db.worklogs.filter(w=>w.employeeId===u.id)}db.leaves=db.leaves.filter(l=>l.employeeId===u.id||l.approverId===u.id||l.submittedBy===u.id)}return db}
+function state_(u){requestRows_={};const db={};Object.keys(SCHEMA).filter(k=>!['audit','credentials','sessions','accessEvents','messages','settings','dailyReports','reportHistory','reportComments','notificationEvents','notifications','passwordResets'].includes(k)).forEach(k=>db[k]=rows_(k));const directoryPeople=directoryPeople_(db.employees,u);db.employeeDirectory=employeeDirectory_(directoryPeople);db.workReportReminder=workReportReminder_(u);db.leavePolicy=leavePolicy_();db.leaveRequestMembers=['Team Leader','Admin'].includes(u.role)?groupLeaveMembers_(u).map(e=>({id:e.id,name:e.name})):[];db.teamPresence=teamPresence_(directoryPeople,db.attendance);const creators=new Map(rows_('audit').filter(event=>event.action==='create').map(event=>[event.target,event.actor]));db.announcements=db.announcements.map(announcement=>{const creatorId=creators.get(announcement.id);const creator=db.employees.find(employee=>employee.id===creatorId);return {...announcement,createdBy:creatorId||'',createdByName:creator?creator.name:''};});const admin=['Admin','HR'].includes(u.role);db.taskAssignees=admin||u.role==='Team Leader'?db.employees.filter(employee=>employee.status==='Active').map(employee=>({id:employee.id,name:employee.name})):[];if(!admin){if(u.role==='Team Leader'){db.projects=db.projects.filter(p=>p.owner===u.id);db.tasks=db.tasks.filter(t=>db.projects.some(p=>p.id===t.projectId)||!t.projectId&&(t.managerId===u.id||t.assignee===u.id));const people=new Set([u.id,...db.tasks.map(t=>t.assignee)]);db.employees=db.employees.filter(e=>people.has(e.id));db.attendance=db.attendance.filter(a=>people.has(a.employeeId));db.worklogs=db.worklogs.filter(w=>people.has(w.employeeId))}else{db.tasks=db.tasks.filter(t=>t.assignee===u.id);db.projects=db.projects.filter(p=>db.tasks.some(t=>t.projectId===p.id));db.employees=db.employees.filter(e=>e.id===u.id);db.attendance=db.attendance.filter(a=>a.employeeId===u.id);db.worklogs=db.worklogs.filter(w=>w.employeeId===u.id)}db.leaves=db.leaves.filter(l=>l.employeeId===u.id||l.approverId===u.id||l.submittedBy===u.id)}return db}
 function validate_(k,r,u,excludeId){const required={employees:['name','email','role','department','designation'],projects:['name','department','owner','due','status','description'],tasks:['title','description','assignee','priority','status'],worklogs:['date','summary','hours'],leaves:['type','start','end','reason'],announcements:['title','message']};if(k==='tasks'){r.projectId=r.projectId||'';r.due=r.due||'';r.status=r.status==='Done'?'Completed':r.status||'To do';r.attachments=r.attachments||'[]';}required[k].forEach(f=>require_(String(r[f]??'').trim(),'Missing '+f));Object.entries(r).forEach(([key,value])=>require_(typeof value==='string'&&value.length<=(k==='tasks'&&key==='attachments'?22000:k==='tasks'&&key==='description'?4000:1000),'Invalid field value.'));['date','due','start','end','joiningDate'].filter(f=>r[f]).forEach(f=>require_(/^\d{4}-\d{2}-\d{2}$/.test(r[f])&&!isNaN(Date.parse(r[f]))&&new Date(r[f]).toISOString().slice(0,10)===r[f],'Invalid date.'));if(k==='employees'){require_(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email),'Invalid email.');r.email=r.email.toLowerCase();require_(['Admin','HR','Team Leader','Employee'].includes(r.role),'Invalid role.');require_(!rows_('employees').some(e=>e.email.toLowerCase()===r.email),'Email already exists.');require_(u.role==='Admin'||!['Admin','HR'].includes(r.role),'Only Admin can create privileged accounts.');r.status='Active'}if(k==='projects'){require_(rows_('employees').some(e=>e.id===r.owner&&['Admin','Team Leader'].includes(e.role)),'Invalid project owner.');require_(['Planning','In progress','Completed'].includes(r.status),'Invalid project status.');require_(u.role!=='Team Leader'||r.owner===u.id,'You can only create your own projects.')}if(k==='tasks'){if(r.projectId){const project=rows_('projects').find(project=>project.id===r.projectId);require_(project,'Project not found.');require_(['Admin','HR'].includes(u.role)||project.owner===u.id,'You can only use your own projects.');}require_(rows_('employees').some(employee=>employee.id===r.assignee&&employee.status==='Active'),'Invalid assignee.');require_(['Low','Medium','High','Urgent'].includes(r.priority)&&['To do','In progress','Blocked','In review','Completed'].includes(r.status),'Invalid task values.');r.attachments=validateTaskLinks_(r.attachments);}if(k==='worklogs'){require_(Number(r.hours)>0&&Number(r.hours)<=24,'Hours must be between 0 and 24.');require_(r.date<=Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd'),'Work logs cannot be in the future.');r.employeeId=u.id}if(k==='leaves')validateLeave_(r,u,excludeId);}
-function api(req){requestBook_=null;const lock=LockService.getScriptLock();try{require_(req&&typeof req.action==='string','Invalid request.');if(!['bootstrap','accessHistory','attendanceSnapshot'].includes(req.action))lock.waitLock(30000);const p=req.payload||{};
- if(req.action==='checkAccount'){limitAuth_('checkAccount');const email=email_(p.email);return {ok:true,data:{exists:rows_('credentials').some(c=>c.email===email)}};}
+function api(req){requestBook_=null;requestRows_={};notificationActor_=null;const lock=LockService.getScriptLock();try{require_(req&&typeof req.action==='string','Invalid request.');if(!['bootstrap','accessHistory','attendanceSnapshot'].includes(req.action))lock.waitLock(30000);const p=req.payload||{};
+ if(req.action==='checkAccount'){limitAuth_('checkAccount');email_(p.email);return {ok:true,data:{continue:true}};}
+ if(req.action==='requestPasswordReset')return {ok:true,data:requestPasswordReset_(p)};
+ if(req.action==='resetPassword')return {ok:true,data:resetPassword_(p)};
  if(['register','login'].includes(req.action))return {ok:true,data:authentication_(req.action,p)};
- const u=currentUser_(req.token);
+ const u=currentUser_(req.token);notificationActor_=u.id;
+ if(['notificationSnapshot','notificationRead','notificationDismiss','notificationOpen'].includes(req.action))return {ok:true,data:notificationsAction_(u,req.action,p)};
  if(['reportSnapshot','saveDailyReport','commentDailyReport','dailyReportHistory','rebuildReportSheet'].includes(req.action))return {ok:true,data:dailyReportsAction_(u,req.action,p)};
  if(req.action==='logout'){rows_('sessions').filter(x=>x.tokenHash===digest_(req.token)).forEach(x=>{x.revoked=new Date().toISOString();update_('sessions',x);});audit_(u.id,'logout',u.id);return {ok:true,data:{}};}
  if(req.action==='setInitialPassword'){setInitialPassword_(u,p);return {ok:true,data:{}};}
@@ -128,7 +137,7 @@ function api(req){requestBook_=null;const lock=LockService.getScriptLock();try{r
  target=leave.id;
  }else if(req.action==='leaveDecision'){
  const l=rows_('leaves').find(l=>l.id===p.id);require_(l&&l.status==='Pending','Leave is missing or already reviewed.');require_(l.employeeId!==u.id&&l.submittedBy!==u.id,'You cannot review your own leave or a group request you submitted.');require_(admin||l.approverId===u.id,'Only Admin, HR or the designated approver can review this request.');require_(['Approved','Rejected'].includes(p.status),'Invalid decision.');
- require_(p.status!=='Rejected'||typeof p.rejectionReason==='string','A rejection reason is required.');const rejectionReason=p.status==='Rejected'?p.rejectionReason.trim():'';require_(p.status!=='Rejected'||rejectionReason.length>0&&rejectionReason.length<=1000,'A rejection reason between 1 and 1000 characters is required.');l.status=p.status;l.reviewer=u.id;l.rejectionReason=rejectionReason;update_('leaves',l);target=l.id}else if(req.action==='attendance'){if(p.requireLocation===true)require_(validLocation_(p.location),'A valid current location is required. Allow location and try again.');const closedAttendanceIds=[];const date=Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd');const matches=rows_('attendance').filter(a=>String(a.employeeId)===String(u.id)&&a.date===date);let a=(p.kind==='out'&&p.attendanceId?matches.find(a=>String(a.id)===String(p.attendanceId)):null)||matches.find(a=>a.checkIn&&!a.checkOut)||matches[0];require_(['in','out'].includes(p.kind),'Invalid attendance action.');if(p.kind==='in'){require_(p.workMode===undefined||['Work from home','Work from office'].includes(p.workMode),'Choose a valid work mode.');require_(!matches.some(row=>row.checkIn&&!row.checkOut),'Punch out your open attendance before punching in again.');a={id:Utilities.getUuid(),employeeId:u.id,date,workMode:p.workMode||'',checkIn:new Date().toISOString(),checkOut:'',created:new Date().toISOString()};append_('attendance',a)}else{require_(a&&a.checkIn&&!a.checkOut,'No open punch-in for your account today. Attendance shown for other employees cannot be punched out by you.');a.checkOut=new Date().toISOString();update_('attendance',a);closedAttendanceIds.push(a.id);matches.filter(other=>other.id!==a.id&&other.checkIn&&!other.checkOut).forEach(other=>{other.checkOut=a.checkOut;update_('attendance',other);closedAttendanceIds.push(other.id);})}const event=accessEvent_(u,p.kind==='in'?'punchIn':'punchOut',p.location,a.id);target=a.id;if(p.compact===true){audit_(u.id,'attendance',a.id);return {ok:true,data:{attendance:a,event,closedAttendanceIds}};}}else throw Error('Unknown action.');append_('audit',{id:Utilities.getUuid(),actor:u.id,action:req.action,target,created:new Date().toISOString()});return {ok:true,data:{db:state_(u)}}}catch(e){console.error('TeamPulse request failed: '+(req&&req.action));return {ok:false,code:e.code,error:e.message||'Unable to complete request.'}}finally{requestBook_=null;if(lock.hasLock())lock.releaseLock()}}
+ require_(p.status!=='Rejected'||typeof p.rejectionReason==='string','A rejection reason is required.');const rejectionReason=p.status==='Rejected'?p.rejectionReason.trim():'';require_(p.status!=='Rejected'||rejectionReason.length>0&&rejectionReason.length<=1000,'A rejection reason between 1 and 1000 characters is required.');l.status=p.status;l.reviewer=u.id;l.rejectionReason=rejectionReason;update_('leaves',l);target=l.id}else if(req.action==='attendance'){if(p.requireLocation===true)require_(validLocation_(p.location),'A valid current location is required. Allow location and try again.');const closedAttendanceIds=[];const date=Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd');const matches=rows_('attendance').filter(a=>String(a.employeeId)===String(u.id)&&a.date===date);let a=(p.kind==='out'&&p.attendanceId?matches.find(a=>String(a.id)===String(p.attendanceId)):null)||matches.find(a=>a.checkIn&&!a.checkOut)||matches[0];require_(['in','out'].includes(p.kind),'Invalid attendance action.');if(p.kind==='in'){require_(p.workMode===undefined||['Work from home','Work from office'].includes(p.workMode),'Choose a valid work mode.');require_(!matches.some(row=>row.checkIn&&!row.checkOut),'Punch out your open attendance before punching in again.');a={id:Utilities.getUuid(),employeeId:u.id,date,workMode:p.workMode||'',checkIn:new Date().toISOString(),checkOut:'',created:new Date().toISOString()};append_('attendance',a)}else{require_(a&&a.checkIn&&!a.checkOut,'No open punch-in for your account today. Attendance shown for other employees cannot be punched out by you.');a.checkOut=new Date().toISOString();update_('attendance',a);closedAttendanceIds.push(a.id);matches.filter(other=>other.id!==a.id&&other.checkIn&&!other.checkOut).forEach(other=>{other.checkOut=a.checkOut;update_('attendance',other);closedAttendanceIds.push(other.id);})}const event=accessEvent_(u,p.kind==='in'?'punchIn':'punchOut',p.location,a.id);target=a.id;if(p.compact===true){audit_(u.id,'attendance',a.id);return {ok:true,data:{attendance:a,event,closedAttendanceIds}};}}else throw Error('Unknown action.');append_('audit',{id:Utilities.getUuid(),actor:u.id,action:req.action,target,created:new Date().toISOString()});return {ok:true,data:{db:state_(u)}}}catch(e){console.error('TeamPulse API request failed.');return {ok:false,code:e.code,error:e.message||'Unable to complete request.'}}finally{requestBook_=null;requestRows_=null;notificationActor_=null;if(lock.hasLock())lock.releaseLock()}}
 
 
 function doPost(e){let r;try{const text=e&&e.postData&&e.postData.contents;require_(typeof text==='string'&&text.length<=65536,'Invalid request.');r=api(JSON.parse(text));}catch{r={ok:false,error:'Invalid request.'};}return ContentService.createTextOutput(JSON.stringify(r)).setMimeType(ContentService.MimeType.JSON);}
@@ -152,7 +161,7 @@ function attendanceSnapshot_(u){
 }
 // Module edits are validated and written under api()'s script lock.
 function deleteRowById_(collection,id){
- const sheet=spreadsheet_().getSheetByName(collection);const ids=sheet.getRange(1,1,sheet.getLastRow(),1).getValues();const index=ids.findIndex(row=>row[0]===id);require_(index>0,'Record not found.');sheet.deleteRow(index+1);
+ const sheet=spreadsheet_().getSheetByName(collection);const ids=sheet.getRange(1,1,sheet.getLastRow(),1).getValues();const index=ids.findIndex(row=>row[0]===id);require_(index>0,'Record not found.');sheet.deleteRow(index+1);invalidateRows_(collection);
 }
 function validateAttendanceCorrection_(record,id){
  require_(typeof record.employeeId==='string'&&rows_('employees').some(e=>e.id===record.employeeId&&e.status!=='Deleted'),'Employee not found.');
@@ -353,7 +362,7 @@ function messagesAction_(u,action,p){
   append_('messages',{id:Utilities.getUuid(),senderId:u.id,recipientId:recipient.id,body:p.body.trim(),created:new Date().toISOString(),readAt:''});
  }
  const messages=(sheet?rows_('messages'):[]).filter(message=>message.senderId===u.id||message.recipientId===u.id);
- if(typeof p.peerId==='string')for(const message of messages){if(message.senderId===p.peerId&&message.recipientId===u.id&&!message.readAt){message.readAt=new Date().toISOString();update_('messages',message);}}
+ if(typeof p.peerId==='string')for(const message of messages){if(message.senderId===p.peerId&&message.recipientId===u.id&&!message.readAt){message.readAt=new Date().toISOString();updateRaw_('messages',message);readMessageNotification_(u.id,message.id);}}
  const ids=new Set(messages.flatMap(message=>[message.senderId,message.recipientId]));
  return {directoryVersion:1,messages,people:people.filter(person=>person.status==='Active'||ids.has(person.id)).map(person=>({id:person.id,name:person.name,photo:person.photo||'',status:person.status,role:person.role,department:person.department||''}))};
 }
@@ -413,7 +422,7 @@ function dailyReportsAction_(u,action,p){
  const reports=reportRows_('dailyReports'),existing=reports.find(r=>r.id===p.id),scope=new Set(reportTeam_(u).map(e=>e.id));
  if(action==='dailyReportHistory'){require_(existing&&scope.has(existing.employeeId),'Report not found or unavailable.');return {history:reportRows_('reportHistory').filter(h=>h.reportId===existing.id).sort((a,b)=>Number(b.revision)-Number(a.revision))};}
  if(action==='commentDailyReport'){
- require_(existing&&scope.has(existing.employeeId)&&existing.employeeId!==u.id,'Only the employee manager, Admin or HR can comment.');require_(typeof p.body==='string'&&p.body.trim().length>0&&p.body.length<=2000,'Enter a comment between 1 and 2000 characters.');ensureReportSheet_('reportComments');append_('reportComments',{id:Utilities.getUuid(),reportId:existing.id,actor:u.id,body:p.body.trim(),created:new Date().toISOString()});audit_(u.id,'commentDailyReport',existing.id);return {...reportSnapshot_(u,p),sheetSync:syncMonthlyReportSheet_(existing.date.slice(0,7),u.id)};
+ require_(existing&&scope.has(existing.employeeId)&&existing.employeeId!==u.id,'Only the employee manager, Admin or HR can comment.');require_(typeof p.body==='string'&&p.body.trim().length>0&&p.body.length<=2000,'Enter a comment between 1 and 2000 characters.');ensureReportSheet_('reportComments');const comment={id:Utilities.getUuid(),reportId:existing.id,actor:u.id,body:p.body.trim(),created:new Date().toISOString()};append_('reportComments',comment);audit_(u.id,'commentDailyReport',existing.id);queueRecordNotification_('reportComments',comment);return {...reportSnapshot_(u,p),sheetSync:syncMonthlyReportSheet_(existing.date.slice(0,7),u.id)};
  }
  require_(action==='saveDailyReport','Unknown report action.');require_(!p.id||existing,'Report not found.');require_(!existing||existing.employeeId===u.id,'You can only edit your own reports.');require_(!existing||Number(p.revision)===Number(existing.revision),'This report changed. Refresh before editing again.');
  const input=p.record;const fields=['projectId','todayWork','doneToday','outputLinks','issues','pendingWork','status','remarks'];require_(input&&typeof input==='object'&&!Array.isArray(input)&&Object.keys(input).every(k=>k==='date'||fields.includes(k)),'Only report details can be edited.');const record={};
@@ -427,7 +436,7 @@ function dailyReportsAction_(u,action,p){
  require_(date<=day,'Report date cannot be in the future.');
  require_(!existing||date===existing.date,'The date of an existing report cannot be changed.');
  const now=new Date().toISOString();const saved={...record,id:existing?existing.id:Utilities.getUuid(),employeeId:u.id,date,projectName:project.name,created:existing?existing.created:now,updated:now,revision:String(existing?Number(existing.revision)+1:1)};
- ensureReportSheet_('dailyReports');ensureReportSheet_('reportHistory');if(existing)update_('dailyReports',saved);else append_('dailyReports',saved);append_('reportHistory',{id:Utilities.getUuid(),reportId:saved.id,revision:saved.revision,actor:u.id,snapshot:JSON.stringify(saved),created:now});audit_(u.id,existing?'editDailyReport':'submitDailyReport',saved.id);return {...reportSnapshot_(u,p),sheetSync:syncMonthlyReportSheet_(saved.date.slice(0,7),u.id)};
+ ensureReportSheet_('dailyReports');ensureReportSheet_('reportHistory');if(existing)update_('dailyReports',saved);else append_('dailyReports',saved);append_('reportHistory',{id:Utilities.getUuid(),reportId:saved.id,revision:saved.revision,actor:u.id,snapshot:JSON.stringify(saved),created:now});audit_(u.id,existing?'editDailyReport':'submitDailyReport',saved.id);queueRecordNotification_('dailyReports',saved);return {...reportSnapshot_(u,p),sheetSync:syncMonthlyReportSheet_(saved.date.slice(0,7),u.id)};
 }
 
 // Readable monthly presentation. dailyReports remains the source of truth.
@@ -459,4 +468,169 @@ function syncMonthlyReportSheet_(month,actor){
  sheet.setFrozenRows(2);sheet.setHiddenGridlines(true);[110,260,220,220,125,220,180,280,240,260,150,260].forEach((width,index)=>sheet.setColumnWidth(index+1,width));
  return {ok:true,name};
  }catch(error){console.error('Monthly work Sheet sync failed: '+error.message);try{audit_(actor,'dailyReportSheetSyncFailed',name);}catch{}return {ok:false,name,error:error.message||'Monthly Sheet could not be updated.'};}
+}
+
+
+// Server-owned inbox. All callers hold the script lock; browser refreshes never create events.
+const notificationCollections_=['tasks','projects','leaves','announcements','employees','attendance','messages'];
+function append_(k,r){appendRaw_(k,r);if(notificationCollections_.includes(k))queueRecordNotification_(k,r);}
+function update_(k,r){
+ const before=notificationCollections_.includes(k)?rows_(k).find(row=>row.id===r.id):null;
+ updateRaw_(k,r);
+ if(before&&SCHEMA[k].some(key=>String(before[key]??'')!==String(r[key]??'')))queueRecordNotification_(k,r,before);
+}
+function ensureNotificationSheets_(){for(const name of ['notificationEvents','notifications'])ensureReportSheet_(name);}
+function notificationTeamIds_(u){return new Set(u.role==='Team Leader'?reportTeam_(u).map(e=>e.id):[u.id]);}
+function notificationRecordVisible_(u,k,r){
+ if(!r)return false;
+ if(k==='messages')return r.recipientId===u.id;
+ if(k==='attendance'||k==='punchReminder')return r.employeeId===u.id;
+ if(['Admin','HR'].includes(u.role))return true;
+ const ids=notificationTeamIds_(u);
+ if(k==='announcements')return true;
+ if(k==='employees')return ids.has(r.id);
+ if(k==='tasks')return ids.has(r.assignee)||u.role==='Team Leader'&&canManageTask_(u,r);
+ if(k==='projects')return r.owner===u.id||rows_('tasks').some(t=>t.projectId===r.id&&ids.has(t.assignee));
+ if(k==='leaves')return ids.has(r.employeeId)||r.approverId===u.id||r.submittedBy===u.id;
+ if(k==='dailyReports')return ids.has(r.employeeId);
+ if(k==='reportComments'){const report=reportRows_('dailyReports').find(x=>x.id===r.reportId);return report&&ids.has(report.employeeId);}
+ return k==='reportReminder'&&r.employeeId===u.id;
+}
+function notificationMessage_(k,r){
+ if(k==='messages')return 'New message from '+(rows_('employees').find(e=>e.id===r.senderId)?.name||'a teammate');
+ if(k==='attendance')return r.checkOut?'Punch-out saved successfully ('+r.date+').':'Punch-in saved successfully ('+r.date+').';
+ if(k==='punchReminder')return r.kind==='in'?'Punch-in reminder: your workday has started. Please punch in.':'Punch-out reminder: your workday is ending. Please punch out when you finish.';
+ if(k==='tasks')return r._changeKind==='reassigned'?'Task reassigned: '+r.title:r._changeKind==='assigned'?'Task assigned: '+r.title:r._changeKind==='status'?'Task status changed: '+r.title+' ('+r.status+')':'Task updated: '+r.title;
+ if(k==='projects')return 'Project: '+r.name+' ('+r.status+')';
+ if(k==='leaves')return 'Leave / WFH request updated ('+r.status+')';
+ if(k==='announcements')return 'Announcement: '+r.title;
+ if(k==='employees')return r.name+': '+r.role+', '+r.status;
+ if(k==='reportComments')return 'New comment on your daily work report';
+ if(k==='reportReminder')return 'Your daily work report is pending ('+r.date+'). Please submit before EOD.';
+ return 'Daily work report updated ('+r.date+')';
+}
+function queueRecordNotification_(k,r,before=null){
+ // Notification failures cannot roll back or turn an already saved record into a failed response.
+ try{
+ if(k==='employees'&&before&&!['role','status','department','designation','reportingManagerId','employeeCode','email'].some(key=>String(before[key]||'')!==String(r[key]||'')))return;
+ if(k==='messages'&&before)return;
+ ensureNotificationSheets_();
+ const changeKind=k==='tasks'?(!before?'assigned':before.assignee!==r.assignee?'reassigned':before.status!==r.status?'status':'updated'):!before?'created':'updated';
+ const record={...r,_changeKind:changeKind,_actor:notificationActor_||''};
+ const latest=rows_('notificationEvents').filter(e=>e.collection===k&&e.recordId===r.id).slice(-1)[0];
+ if(latest&&latest.record===JSON.stringify(record))return;
+ const recipients=(k==='messages'?[r.recipientId]:k==='attendance'?[r.employeeId]:rows_('employees').filter(u=>u.status==='Active'&&notificationRecordVisible_(u,k,r)).map(u=>u.id)).filter(id=>id!==notificationActor_||k==='attendance');
+ if(!recipients.length)return;
+ const id=digest_(k+':'+r.id+':'+(latest?.id||'first')+':'+JSON.stringify(record));
+ appendRaw_('notificationEvents',{id,collection:k,recordId:r.id,record:JSON.stringify(record),recipients:JSON.stringify([...new Set(recipients)]),created:new Date().toISOString(),delivered:''});
+ }catch(error){console.error('Notification queue failed for '+k+':'+r.id+': '+error.message);}
+}
+function deliverNotifications_(){
+ ensureNotificationSheets_();const existing=new Set(rows_('notifications').map(n=>n.id));
+ for(const event of rows_('notificationEvents').filter(e=>!e.delivered)){
+  try{
+   const record=JSON.parse(event.record);
+   for(const recipientId of JSON.parse(event.recipients)){
+    const id=digest_(event.id+':'+recipientId);if(existing.has(id))continue;
+    appendRaw_('notifications',{id,eventId:event.id,recipientId,collection:event.collection,recordId:event.recordId,message:notificationMessage_(event.collection,record),created:event.created,readAt:'',dismissedAt:'',deliveredAt:''});existing.add(id);
+   }
+   updateRaw_('notificationEvents',{...event,delivered:new Date().toISOString()});
+  }catch(error){console.error('Notification delivery pending: '+event.id);}
+ }
+}
+function currentNotificationRecord_(n){
+ if(['reportReminder','punchReminder'].includes(n.collection)){const e=rows_('notificationEvents').find(e=>e.id===n.eventId);return e?JSON.parse(e.record):null;}
+ return rows_(n.collection).find(r=>r.id===n.recordId);
+}
+function notificationAllowed_(u,n){
+ if(n.recipientId!==u.id)return false;
+ if(n.collection==='punchReminder'){const reminder=currentNotificationRecord_(n);if(!reminder||!punchReminderPending_(u,reminder))return false;}
+ if(n.collection==='reportReminder'){const record=currentNotificationRecord_(n);if(!record||!reportExpectedDay_(u,record.date,leavePolicy_(),rows_('leaves'))||reportRows_('dailyReports').some(r=>r.employeeId===u.id&&r.date===record.date))return false;}
+ const record=currentNotificationRecord_(n);
+ // Deleted records retain the recipient receipt, but never return the old record payload.
+ return !record||notificationRecordVisible_(u,n.collection,record);
+}
+function notificationsAction_(u,action,p){
+ ensureNotificationSheets_();deliverNotifications_();
+ const limit=p.limit===undefined?50:p.limit,cursor=p.cursor||null;
+ require_(Number.isInteger(limit)&&limit>=1&&limit<=100,'Choose a page size between 1 and 100.');
+ require_(!cursor||typeof cursor==='object'&&!Array.isArray(cursor)&&Object.keys(cursor).every(k=>['created','id'].includes(k))&&typeof cursor.created==='string'&&cursor.created.length<=35&&Number.isFinite(Date.parse(cursor.created))&&typeof cursor.id==='string'&&/^[a-f0-9]{64}$/.test(cursor.id),'Invalid notification page.');
+ require_(p.popupIds===undefined||Array.isArray(p.popupIds)&&p.popupIds.length<=100&&p.popupIds.every(id=>typeof id==='string'&&/^[a-f0-9]{64}$/.test(id)),'Invalid popup selection.');
+ const own=rows_('notifications').filter(n=>notificationAllowed_(u,n));
+ if(action==='notificationOpen'){
+  const n=own.find(n=>n.id===p.id);require_(n,'Notification unavailable.');
+  const record=currentNotificationRecord_(n);require_(record&&record.status!=='Deleted','This item has been deleted or is no longer available.');
+  if(['reportReminder','punchReminder'].includes(n.collection))return {collection:n.collection,record};
+  require_(notificationRecordVisible_(u,n.collection,record),'This item is no longer available to your account.');
+  if(n.collection==='reportComments'){const report=reportRows_('dailyReports').find(r=>r.id===record.reportId);require_(report&&notificationRecordVisible_(u,'dailyReports',report),'This report has been deleted or is no longer available.');return {collection:'dailyReports',record:report};}
+  return {collection:n.collection,record};
+ }
+ const now=new Date().toISOString();
+ if(action==='notificationRead'||action==='notificationDismiss'){
+  require_(p.all===true||Array.isArray(p.ids)&&p.ids.length<=500,'Select notifications.');
+  if(p.all!==true)require_(p.ids.every(id=>own.some(n=>n.id===id)),'Notification unavailable.');
+  for(const n of own.filter(n=>p.all===true||p.ids.includes(n.id)))updateRaw_('notifications',{...n,readAt:n.readAt||now,dismissedAt:action==='notificationDismiss'?now:n.dismissedAt});
+ }
+ const visible=rows_('notifications').filter(n=>notificationAllowed_(u,n)&&!n.dismissedAt).sort((a,b)=>b.created.localeCompare(a.created)||b.id.localeCompare(a.id));
+ require_(p.claimPopups===undefined||typeof p.claimPopups==='boolean','Invalid popup request.');
+ const capacity=Math.min(5,Math.max(0,100-(p.popupIds||[]).length));
+ const fresh=action==='notificationSnapshot'&&p.claimPopups!==false?visible.filter(n=>!n.deliveredAt&&!n.readAt).slice(0,capacity):[];
+ for(const n of fresh)updateRaw_('notifications',{...n,deliveredAt:now});
+ const pages={tasks:'Tasks',projects:'Projects',leaves:'Leave requests',announcements:'Announcements',employees:'Employees',dailyReports:'Daily Work Report',reportComments:'Daily Work Report',reportReminder:'Daily Work Report',attendance:'Attendance',punchReminder:'Attendance',messages:'Messages'};
+ const events=new Map(rows_('notificationEvents').map(e=>[e.id,e]));
+ const present=n=>{let record;try{record=JSON.parse(events.get(n.eventId)?.record||'null');}catch{}return {id:n.id,message:record?notificationMessage_(n.collection,record):'Workspace update',time:n.created,read:!!n.readAt,page:pages[n.collection],collection:n.collection,recordId:n.recordId};};
+ const remaining=visible.filter(n=>!cursor||n.created<cursor.created||n.created===cursor.created&&n.id<cursor.id),page=remaining.slice(0,limit),last=page.slice(-1)[0];
+ return {unread:visible.filter(n=>!n.readAt).length,items:page.map(present),freshItems:fresh.map(present),freshIds:fresh.map(n=>n.id),activePopupIds:visible.filter(n=>!n.readAt&&(p.popupIds||[]).includes(n.id)).map(n=>n.id),nextCursor:remaining.length>limit?{created:last.created,id:last.id}:null};
+}
+function reportReminderSchedule_(){
+ const props=PropertiesService.getScriptProperties(),eod=props.getProperty('REPORT_EOD_TIME')||'18:30',lead=Number(props.getProperty('REPORT_REMINDER_MINUTES')||'30');
+ require_(/^([01]\d|2[0-3]):[0-5]\d$/.test(eod)&&Number.isInteger(lead)&&lead>=5&&lead<=180,'Configure REPORT_EOD_TIME (HH:mm) and REPORT_REMINDER_MINUTES (5-180).');
+ const [h,m]=eod.split(':').map(Number);require_(h*60+m>=lead,'Reminder must fall on the same IST day.');return {end:h*60+m,start:h*60+m-lead};
+}
+// Run once from the Apps Script editor after deploying; safe to rerun without duplicate triggers.
+function installNotificationSchedule_(){
+ reportReminderSchedule_();punchSchedule_();const handler='processNotificationSchedule_';
+ const triggers=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()===handler);
+ if(!triggers.length)ScriptApp.newTrigger(handler).timeBased().everyMinutes(5).inTimezone('Asia/Kolkata').create();
+ for(const extra of triggers.slice(1))ScriptApp.deleteTrigger(extra);
+}
+function processNotificationSchedule_(){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);requestBook_=null;requestRows_={};notificationActor_=null;
+ try{
+  ensureNotificationSheets_();const now=new Date(),day=Utilities.formatDate(now,'Asia/Kolkata','yyyy-MM-dd'),clock=Utilities.formatDate(now,'Asia/Kolkata','HH:mm').split(':').map(Number),minutes=clock[0]*60+clock[1],schedule=reportReminderSchedule_();
+  if(minutes>=schedule.start&&minutes<schedule.end){
+   const policy=leavePolicy_(),leaves=rows_('leaves'),reports=reportRows_('dailyReports'),events=new Set(rows_('notificationEvents').map(e=>e.id));
+   for(const employee of rows_('employees')){
+    const id='reportReminder:'+employee.id+':'+day;
+    if(events.has(id)||!reportExpectedDay_(employee,day,policy,leaves)||reports.some(r=>r.employeeId===employee.id&&r.date===day))continue;
+    const record={id,employeeId:employee.id,date:day};
+    appendRaw_('notificationEvents',{id,collection:'reportReminder',recordId:id,record:JSON.stringify(record),recipients:JSON.stringify([employee.id]),created:now.toISOString(),delivered:''});events.add(id);
+   }
+  }
+  queuePunchReminders_(day,minutes,now);deliverNotifications_();
+ }finally{requestBook_=null;requestRows_=null;lock.releaseLock();}
+}
+
+function punchSchedule_(){
+ const props=PropertiesService.getScriptProperties(),parse=(key,fallback)=>{const value=props.getProperty(key)||fallback;require_(/^([01]\d|2[0-3]):[0-5]\d$/.test(value),'Configure '+key+' as HH:mm in IST.');const parts=value.split(':').map(Number);return parts[0]*60+parts[1];};
+ const start=parse('PUNCH_IN_TIME','09:30'),end=parse('PUNCH_OUT_TIME','18:30');require_(end>start,'Punch-out time must follow punch-in time.');return {start,end};
+}
+function punchReminderPending_(u,r){
+ if(r.date!==Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd')||!reportExpectedDay_(u,r.date,leavePolicy_(),rows_('leaves')))return false;
+ const attendance=rows_('attendance').filter(a=>a.employeeId===u.id&&a.date===r.date);
+ return r.kind==='in'?!attendance.some(a=>a.checkIn):attendance.some(a=>a.checkIn&&!a.checkOut);
+}
+function queuePunchReminders_(day,minutes,now){
+ const schedule=punchSchedule_(),events=new Set(rows_('notificationEvents').map(e=>e.id));
+ const kind=minutes>=schedule.start&&minutes<Math.min(schedule.start+30,schedule.end)?'in':minutes>=schedule.end&&minutes<Math.min(schedule.end+30,1440)?'out':'';
+ if(!kind)return;
+ for(const employee of rows_('employees')){
+  const id='punchReminder:'+kind+':'+employee.id+':'+day,record={id,employeeId:employee.id,date:day,kind};
+  if(events.has(id)||!punchReminderPending_(employee,record))continue;
+  appendRaw_('notificationEvents',{id,collection:'punchReminder',recordId:id,record:JSON.stringify(record),recipients:JSON.stringify([employee.id]),created:now.toISOString(),delivered:''});events.add(id);
+ }
+}
+
+function readMessageNotification_(employeeId,messageId){
+ try{ensureNotificationSheets_();deliverNotifications_();for(const n of rows_('notifications').filter(n=>n.recipientId===employeeId&&n.collection==='messages'&&n.recordId===messageId&&!n.readAt))updateRaw_('notifications',{...n,readAt:new Date().toISOString()});}catch(error){console.error('Message notification receipt pending: '+messageId);}
 }

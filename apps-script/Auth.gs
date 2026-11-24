@@ -48,3 +48,79 @@ function setInitialPassword_(u,p){
  require_(u.role==='Admin'||!['Admin','HR'].includes(e.role),'Only Admin can manage privileged accounts.');require_(!rows_('credentials').some(c=>c.employeeId===e.id),'This account already has a password.');password_(p.password);
  append_('credentials',{id:Utilities.getUuid(),employeeId:e.id,email:e.email.toLowerCase(),passwordHash:hashPassword_(p.password),failedAttempts:0,lockedUntil:'',created:new Date().toISOString(),lastLogin:''});audit_(u.id,'setInitialPassword',e.id);
 }
+
+
+const resetRequestMessage_='If an eligible account matches this email, a reset link will be sent. Check your inbox and spam folder. You can try again after 60 seconds.';
+function resetConfig_(){
+ const props=PropertiesService.getScriptProperties(),url=props.getProperty('PASSWORD_RESET_FRONTEND_URL')||'',secret=props.getProperty('PASSWORD_RESET_SECRET')||'';let origins;
+ try{origins=JSON.parse(props.getProperty('PASSWORD_RESET_ALLOWED_ORIGINS')||'[]');}catch{}
+ const match=/^(https:\/\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)\/reset-password$/.exec(url);
+ require_(match&&Array.isArray(origins)&&origins.includes(match[1])&&/^[a-f0-9]{64}$/.test(secret),'Password recovery is not configured. Contact your administrator.');
+ return {url,secret};
+}
+function resetBucket_(key,maximum,windowMs,now){
+ const props=PropertiesService.getScriptProperties();let bucket;try{bucket=JSON.parse(props.getProperty(key)||'null');}catch{}
+ if(!bucket||!Number.isFinite(bucket.start)||!Number.isFinite(bucket.count)||now-bucket.start>=windowMs)bucket={start:now,count:0,last:0};
+ const allowed=bucket.count<maximum;bucket.count++;props.setProperty(key,JSON.stringify(bucket));return {allowed,bucket};
+}
+function newResetToken_(secret){
+ // HMAC-SHA256 is a cryptographic PRF. The owner supplies a CSPRNG-generated 256-bit secret.
+ // A lock-protected counter + UUID ensures unique inputs; secrecy never relies on UUID randomness.
+ const props=PropertiesService.getScriptProperties(),counter=Number(props.getProperty('PASSWORD_RESET_COUNTER')||'0')+1;
+ require_(Number.isSafeInteger(counter),'Password recovery needs administrator maintenance.');props.setProperty('PASSWORD_RESET_COUNTER',String(counter));
+ return Utilities.computeHmacSha256Signature('TeamPulse password reset v1:'+counter+':'+Utilities.getUuid(),secret,Utilities.Charset.UTF_8).map(b=>(b&255).toString(16).padStart(2,'0')).join('');
+}
+function requestPasswordReset_(p){
+ const started=Date.now();
+ try{
+  require_(p&&typeof p==='object'&&!Array.isArray(p)&&Object.keys(p).every(k=>k==='email'),'Invalid reset request.');const email=email_(p.email),config=resetConfig_(),now=Date.now();
+  try{
+  const global=resetBucket_('RESET_REQUEST_GLOBAL',20,900000,now);if(!global.allowed)return {message:resetRequestMessage_};
+  const key='RESET_EMAIL_'+digest_(email),account=resetBucket_(key,5,3600000,now),last=account.bucket.last||0;
+  if(!account.allowed||last&&now-last<60000)return {message:resetRequestMessage_};
+  account.bucket.last=now;PropertiesService.getScriptProperties().setProperty(key,JSON.stringify(account.bucket));
+  ensureReportSheet_('passwordResets');
+  const credentials=rows_('credentials'),matching=credentials.filter(c=>String(c.email).trim().toLowerCase()===email),credential=matching.length===1?matching[0]:null,employee=rows_('employees').find(e=>credential&&e.id===credential.employeeId&&e.status==='Active'&&String(e.email).trim().toLowerCase()===email);
+  // Unknown, disabled and unprovisioned accounts take the same response path and cooldown.
+  const token=newResetToken_(config.secret),tokenHash=digest_(token),createdAt=new Date(now).toISOString();
+  if(!credential||!employee)return {message:resetRequestMessage_};
+  for(const row of rows_('passwordResets').filter(r=>r.employeeId===employee.id&&!r.usedAt))updateRaw_('passwordResets',{...row,usedAt:createdAt});
+  const record={id:Utilities.getUuid(),employeeId:employee.id,tokenHash,expires:new Date(now+900000).toISOString(),usedAt:'',createdAt,credentialHash:digest_(credential.passwordHash),emailHash:digest_(email)};
+  appendRaw_('passwordResets',record);
+  try{
+   require_(MailApp.getRemainingDailyQuota()>0,'Email unavailable');
+   MailApp.sendEmail({to:email,subject:'TeamPulse: reset your password',body:'A password reset was requested for your TeamPulse account.\n\nOpen this secure link within 15 minutes:\n'+config.url+'#token='+token+'\n\nThis link can be used once. If you did not request this, ignore this email. Your password has not changed.',name:'TeamPulse'});
+  }catch(error){updateRaw_('passwordResets',{...record,usedAt:new Date().toISOString()});console.error('Password reset email delivery unavailable.');}
+  return {message:resetRequestMessage_};
+  }catch{console.error('Password reset request temporarily unavailable.');return {message:resetRequestMessage_};}
+ }finally{
+  // Equal minimum response time for eligible, unknown and throttled requests; never log mail exceptions.
+  const remaining=2500-(Date.now()-started);if(remaining>0)Utilities.sleep(remaining);
+ }
+}
+function resetLinkError_(){const error=new Error('This reset link is invalid, expired or already used. Request a new link.');error.code='INVALID_RESET_LINK';return error;}
+function resetPassword_(p){
+ require_(p&&typeof p==='object'&&!Array.isArray(p)&&Object.keys(p).every(k=>['token','newPassword','confirmPassword'].includes(k)),'Invalid reset request.');
+ const now=Date.now(),limit=resetBucket_('RESET_SUBMIT_GLOBAL',50,900000,now);require_(limit.allowed,'Too many reset attempts. Please retry later.');
+ if(typeof p.token!=='string'||! /^[a-f0-9]{64}$/.test(p.token))throw resetLinkError_();
+ password_(p.newPassword);require_(p.newPassword===p.confirmPassword,'Passwords do not match.');ensureReportSheet_('passwordResets');
+ const row=rows_('passwordResets').find(r=>r.tokenHash===digest_(p.token));
+ if(!row||row.usedAt||!Number.isFinite(Date.parse(row.expires))||Date.parse(row.expires)<=now)throw resetLinkError_();
+ const employee=rows_('employees').find(e=>e.id===row.employeeId&&e.status==='Active'),credential=rows_('credentials').find(c=>c.employeeId===row.employeeId);
+ if(!employee||!credential||row.credentialHash!==digest_(credential.passwordHash)||row.emailHash!==digest_(String(credential.email).trim().toLowerCase())||row.emailHash!==digest_(String(employee.email).trim().toLowerCase()))throw resetLinkError_();
+ const hash=hashPassword_(p.newPassword),usedAt=new Date(now).toISOString();
+ // api() holds the script lock through validation, token consumption and credential writes.
+ // Consume first, then revoke sessions, then save: partial storage failures fail closed.
+ updateRaw_('passwordResets',{...row,usedAt});
+ for(const previous of rows_('passwordResets').filter(r=>r.employeeId===employee.id&&!r.usedAt))updateRaw_('passwordResets',{...previous,usedAt});
+ revokeSessions_(employee.id);
+ updateRaw_('credentials',{...credential,passwordHash:hash,failedAttempts:0,lockedUntil:''});
+ try{audit_(employee.id,'passwordReset',employee.id);}catch{console.error('Password reset audit unavailable.');}
+ try{MailApp.sendEmail({to:credential.email,subject:'TeamPulse: your password was changed',body:'Your TeamPulse password was reset successfully. All previous sessions have been signed out. If you did not make this change, contact your administrator immediately. No password is included in this email.',name:'TeamPulse'});}catch{console.error('Password reset confirmation email unavailable.');}
+ return {message:'Your password has been reset. Sign in with your new password.'};
+}
+// Owner-run additive migration only. Does not provision Admins or modify existing credentials.
+function preparePasswordRecovery_(){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);requestBook_=null;
+ try{resetConfig_();ensureReportSheet_('passwordResets');rows_('passwordResets');}finally{requestBook_=null;lock.releaseLock();}
+}

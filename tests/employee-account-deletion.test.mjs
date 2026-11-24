@@ -12,7 +12,7 @@ for(const email of ['admin@company.test','h@company.test'])test(email+' deletes 
  const result=b.call('deleteEmployeeAccount',{id:'e',confirmPermanent:true});assert.equal(result.ok,true,result.error);
  for(const collection of ['employees','credentials','sessions']){const column=b.sheets[collection][0].indexOf(collection==='employees'?'id':'employeeId');assert.equal(b.sheets[collection].slice(1).some(row=>row[column]==='e'),false,collection);}
  assert.equal(JSON.stringify([b.sheets.attendance,b.sheets.worklogs,b.sheets.leaves,b.sheets.accessEvents]),historical);
- assert.equal(b.call('bootstrap',{},employeeToken).code,'UNAUTHENTICATED');assert.equal(b.call('checkAccount',{email:'e@company.test'}).data.exists,false);assert.equal(result.data.db.employees.some(person=>person.id==='e'),false);assert.equal(b.sheets.audit.at(-1)[2],'deleteEmployeeAccount');
+ assert.equal(b.call('bootstrap',{},employeeToken).code,'UNAUTHENTICATED');assert.equal(b.call('checkAccount',{email:'e@company.test'}).data.continue,true);assert.equal(result.data.db.employees.some(person=>person.id==='e'),false);assert.equal(b.sheets.audit.at(-1)[2],'deleteEmployeeAccount');
 });
 test('deletion preview blocks shared work and does not change any Sheet data',()=>{
  const b=backend();const before=JSON.stringify(b.sheets);const leader=b.call('employeeDeletionPreview',{id:'l'});assert.equal(leader.ok,true);assert.equal(leader.data.counts.projects,1);assert.equal(leader.data.canDelete,false);assert.equal(JSON.stringify(b.sheets),before);
